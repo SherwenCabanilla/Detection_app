@@ -1,0 +1,140 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": []
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "code",
+      "execution_count": 5,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 314
+        },
+        "id": "gEZHYULGLuZ3",
+        "outputId": "c583f902-8728-4f87-bc1e-642eb23af743"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "[nltk_data] Downloading package stopwords to /root/nltk_data...\n",
+            "[nltk_data]   Unzipping corpora/stopwords.zip.\n",
+            "[nltk_data] Downloading package vader_lexicon to /root/nltk_data...\n",
+            "[nltk_data] Downloading package punkt to /root/nltk_data...\n",
+            "[nltk_data]   Unzipping tokenizers/punkt.zip.\n"
+          ]
+        },
+        {
+          "output_type": "error",
+          "ename": "FileNotFoundError",
+          "evalue": "[Errno 2] No such file or directory: 'Pride and Prejudice.txt'",
+          "traceback": [
+            "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+            "\u001b[0;31mFileNotFoundError\u001b[0m                         Traceback (most recent call last)",
+            "\u001b[0;32m<ipython-input-5-44c8a54dc1c2>\u001b[0m in \u001b[0;36m<cell line: 0>\u001b[0;34m()\u001b[0m\n\u001b[1;32m     15\u001b[0m \u001b[0mnltk\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mdownload\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m'punkt'\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     16\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 17\u001b[0;31m \u001b[0;32mwith\u001b[0m \u001b[0mopen\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mbook\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m'r'\u001b[0m\u001b[0;34m)\u001b[0m \u001b[0;32mas\u001b[0m \u001b[0mf\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     18\u001b[0m   \u001b[0mtext\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mf\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mread\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     19\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;31mFileNotFoundError\u001b[0m: [Errno 2] No such file or directory: 'Pride and Prejudice.txt'"
+          ]
+        }
+      ],
+      "source": [
+        "import nltk\n",
+        "import pandas as pd\n",
+        "import matplotlib.pyplot as plt\n",
+        "from nltk.sentiment import SentimentIntensityAnalyzer\n",
+        "from nltk.tokenize import word_tokenize\n",
+        "from nltk.corpus import stopwords\n",
+        "from wordcloud import WordCloud\n",
+        "from PIL import Image\n",
+        "from google.colab import files\n",
+        "\n",
+        "book =r'Pride and Prejudice.txt'\n",
+        "\n",
+        "nltk.download('stopwords')\n",
+        "nltk.download('vader_lexicon')\n",
+        "nltk.download('punkt')\n",
+        "\n",
+        "with open(book, 'r') as f:\n",
+        "  text = f.read()\n",
+        "\n",
+        "text\n",
+        "\n",
+        "sia = SentimentIntensityAnalyzer()\n",
+        "sentences = nltk.sent_tokenize(text)\n",
+        "\n",
+        "sentiment_data = []\n",
+        "for idx, sentence in enumerate(sentences):\n",
+        "  score = sia.polarity_scores(sentence)\n",
+        "  sentiment_data.append({\n",
+        "      'Index': idx,\n",
+        "      'Sentence': sentence,\n",
+        "      'Positive': score['pos'],\n",
+        "      'Negative': score['neg'],\n",
+        "      'Neutral': score['neu'],\n",
+        "      'Compound': score['compound']\n",
+        "  })\n",
+        "\n",
+        "sentiment_df = pd.DataFrame(sentiment_data)\n",
+        "\n",
+        "print(\"Sample Sentiment Scores Table:\")\n",
+        "print(sentiment_df.head(10))\n",
+        "\n",
+        "plt.figure(figsize=(12, 6))\n",
+        "plt.scatter(sentiment_df['Index'], sentiment_df['Compound'], alpha=0.6, color='blue')\n",
+        "plt.axhline(y=0, color='red', linestyle='--', label='Neutral Line')\n",
+        "plt.title('Sentiment Analysis - Compound Scores per Sentence')\n",
+        "plt.xlabel('Sentence Index')\n",
+        "plt.ylabel('Compound Score')\n",
+        "plt.legend()\n",
+        "plt.grid(True)\n",
+        "plt.show()\n",
+        "\n",
+        "words = word_tokenize(text)\n",
+        "words\n",
+        "\n",
+        "stop_words = set(stopwords.words('english')+[\"would\",\"could\"])\n",
+        "clean_words = [w for w in words if not w in stop_words]\n",
+        "clean_words\n",
+        "\n",
+        "stop_words = set(stopwords.words('english'))\n",
+        "clean_words = [w.lower() for w in words if w.isalpha() and w.lower() not in stop_words]\n",
+        "\n",
+        "frequency_distribution = nltk.FreqDist(clean_words)\n",
+        "words_freq = dict([(x, y) for x, y in frequency_distribution.items() if len(x) > 3])\n",
+        "words_freq\n",
+        "\n",
+        "wcloud = WordCloud().generate_from_frequencies(words_freq)\n",
+        "\n",
+        "plt.figure(figsize=[12,12])\n",
+        "plt.imshow(wcloud, interpolation=\"bilinear\")\n",
+        "plt.axis(\"off\")\n",
+        "plt.show()\n",
+        "\n",
+        "# The line below caused an indentation error. It was an extra line with incorrect indentation.\n",
+        "# \"the book. \"\n",
+        "\n",
+        "uploaded = files.upload()\n",
+        "\n",
+        "print(\"\\n📘 Conclusion / Interpretation:\")\n",
+        "print(\"The sentiment analysis of the text shows a mix of positive and neutral emotions \"\n",
+        "      \"with occasional negative tones. \"\n",
+        "      \"Most compound scores are above 0, indicating a generally positive tone throughout \"\n",
+        "      \"the book. \"\n",
+        "      \"Negative scores appear during conflict or emotionally intense scenes. Overall, the \"\n",
+        "      \"story maintains a balanced emotional profile.\")"
+      ]
+    }
+  ]
+}

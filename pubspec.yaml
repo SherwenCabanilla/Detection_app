@@ -1,0 +1,50 @@
+name: capstone
+description: "A new Flutter project."
+publish_to: "none" # Keep it as none for private apps
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  camera: ^0.10.5+9
+  tflite_flutter: ^0.10.1
+  path_provider: ^2.0.8 # For storing captured images locally
+  image_picker: ^0.8.5+3 # Optional: if you want to pick images from the gallery
+  image: ^3.0.1 # For image processing (resizing, etc.)
+  cupertino_icons: ^1.0.8 # For iOS style icons
+  fl_chart: ^0.66.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0 # For good coding practices
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/v19.tflite
+    - assets/labels.txt
+    - assets/logo.png
+    - assets/diseases/anthracnose.jpg
+    - assets/diseases/powdery_mildew.jpg
+    - assets/diseases/backterial_blackspot.jpg
+    - assets/diseases/backterial_blackspot1.jpg
+    - assets/diseases/dieback.jpg
+    - assets/diseases/tip_burn.jpg
+    - assets/diseases/healthy.jpg
+    - assets/diseases/
+    # Add any other image or asset files here
+    # - assets/images/your_image.jpg
+
+  # Optional: If you plan to add custom fonts
+  # fonts:
+  #   - family: CustomFont
+  #     fonts:
+  #       - asset: fonts/CustomFont-Regular.ttf
+  #       - asset: fonts/CustomFont-Bold.ttf
+  #         weight: 700
