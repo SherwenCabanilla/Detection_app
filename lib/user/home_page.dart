@@ -65,7 +65,7 @@ class _HomePageState extends State<HomePage> {
         'Maintain plant vigor through balanced nutrition and irrigation to resist infection.',
       ],
     },
-    'Bacterial Black Spot': {
+    'Bacterial black spot': {
       'scientificName': 'Xanthomonas campestris pv. mangiferaeindicae',
       'symptoms': [
         'Angular black lesions with yellow halos often appear along veins and can lead to early leaf drop (Ploetz, 2003).',
@@ -300,7 +300,7 @@ class _HomePageState extends State<HomePage> {
                               'assets/diseases/anthracnose.jpg',
                             ),
                             _buildDiseaseCard(
-                              'Bacterial Black Spot',
+                              'Bacterial black spot',
                               'assets/diseases/backterial_blackspot1.jpg',
                             ),
                             _buildDiseaseCard(

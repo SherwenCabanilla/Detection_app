@@ -20,6 +20,22 @@ class DetectionResultCard extends StatelessWidget {
     return DetectionPainter.diseaseColors[result.label] ?? Colors.grey;
   }
 
+  String _formatLabel(String label) {
+    switch (label.toLowerCase()) {
+      case 'backterial_blackspot':
+        return 'Bacterial black spot';
+      case 'powdery_mildew':
+        return 'Powdery Mildew';
+      case 'tip_burn':
+        return 'Tip Burn';
+      default:
+        return label
+            .split('_')
+            .map((word) => word[0].toUpperCase() + word.substring(1))
+            .join(' ');
+    }
+  }
+
   IconData _getSeverityIcon() {
     if (percentage != null) {
       if (percentage! > 0.8) return Icons.warning_amber_rounded;
@@ -132,7 +148,7 @@ class DetectionResultCard extends StatelessWidget {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                result.label,
+                                _formatLabel(result.label),
                                 style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
@@ -234,7 +250,7 @@ class DetectionResultCard extends StatelessWidget {
                         Row(
                           children: [
                             Text(
-                              result.label,
+                              _formatLabel(result.label),
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,

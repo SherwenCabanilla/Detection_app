@@ -256,6 +256,22 @@ class _DetectionScreenState extends State<DetectionScreen> {
     }
   }
 
+  String _formatLabel(String label) {
+    switch (label.toLowerCase()) {
+      case 'backterial_blackspot':
+        return 'Bacterial black spot';
+      case 'powdery_mildew':
+        return 'Powdery Mildew';
+      case 'tip_burn':
+        return 'Tip Burn';
+      default:
+        return label
+            .split('_')
+            .map((word) => word[0].toUpperCase() + word.substring(1))
+            .join(' ');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -379,7 +395,7 @@ class _DetectionScreenState extends State<DetectionScreen> {
                             Colors.grey,
                         child: Text('${index + 1}'),
                       ),
-                      title: Text(result.label),
+                      title: Text(_formatLabel(result.label)),
                       subtitle: Text(
                         'Confidence: ${(result.confidence * 100).toStringAsFixed(1)}%',
                       ),

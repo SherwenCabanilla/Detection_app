@@ -175,6 +175,22 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     return 'low';
   }
 
+  String _formatLabel(String label) {
+    switch (label.toLowerCase()) {
+      case 'backterial_blackspot':
+        return 'Bacterial black spot';
+      case 'powdery_mildew':
+        return 'Powdery Mildew';
+      case 'tip_burn':
+        return 'Tip Burn';
+      default:
+        return label
+            .split('_')
+            .map((word) => word[0].toUpperCase() + word.substring(1))
+            .join(' ');
+    }
+  }
+
   Widget _buildDiseaseSummaryCard(
     String disease,
     int count,
@@ -226,7 +242,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      disease,
+                      _formatLabel(disease),
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -434,7 +450,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                disease,
+                                _formatLabel(disease),
                                 style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
