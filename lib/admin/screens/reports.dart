@@ -26,7 +26,7 @@ class _ReportsState extends State<Reports> {
     {'name': 'Bacterial Blackspot', 'count': 98, 'percentage': 0.16},
     {'name': 'Powdery Mildew', 'count': 145, 'percentage': 0.23},
     {'name': 'Dieback', 'count': 70, 'percentage': 0.11},
-    {'name': 'Tip Burn', 'count': 42, 'percentage': 0.07},
+    {'name': 'Tip Burn (Unknown)', 'count': 42, 'percentage': 0.07},
     {'name': 'Healthy', 'count': 112, 'percentage': 0.18},
   ];
 

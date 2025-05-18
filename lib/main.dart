@@ -7,10 +7,12 @@ import 'test_account.dart';
 import 'admin/screens/admin_login.dart';
 
 void main() {
-  runApp(CapstoneApp());
+  runApp(const CapstoneApp());
 }
 
 class CapstoneApp extends StatelessWidget {
+  const CapstoneApp({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -25,13 +27,13 @@ class CapstoneApp extends StatelessWidget {
           ),
         ),
       ),
-      home: LoginPage(),
+      home: const LoginPage(),
       routes: {
-        '/login': (context) => LoginPage(),
-        '/register': (context) => RegisterPage(),
-        '/user-home': (context) => HomePage(),
-        '/expert-home': (context) => ExpertDashboard(),
-        '/admin-login': (context) => AdminLogin(),
+        '/login': (context) => const LoginPage(),
+        '/register': (context) => const RegisterPage(),
+        '/user-home': (context) => const HomePage(),
+        '/expert-home': (context) => const ExpertDashboard(),
+        '/admin-login': (context) => const AdminLogin(),
       },
     );
   }

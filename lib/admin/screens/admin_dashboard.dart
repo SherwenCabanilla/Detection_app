@@ -33,26 +33,64 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Welcome Section
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Welcome, ${widget.adminUser.username}!',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+          Center(
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Welcome, ${widget.adminUser.username}!',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Last login: ${widget.adminUser.lastLogin.toString()}',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Stats Grid
+          Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 3,
+                crossAxisSpacing: 24,
+                mainAxisSpacing: 24,
+                childAspectRatio: 1.8,
+                children: [
+                  _buildStatCard(
+                    'Total Users',
+                    '1,234',
+                    Icons.people,
+                    Colors.blue,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Last login: ${widget.adminUser.lastLogin.toString()}',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  _buildStatCard(
+                    'Pending Approvals',
+                    '12',
+                    Icons.pending_actions,
+                    Colors.orange,
+                  ),
+                  _buildStatCard(
+                    'Total Reports',
+                    '567',
+                    Icons.assessment,
+                    Colors.purple,
                   ),
                 ],
               ),
@@ -60,60 +98,44 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           const SizedBox(height: 24),
 
-          // Stats Grid
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 4,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            children: [
-              _buildStatCard('Total Users', '1,234', Icons.people, Colors.blue),
-              _buildStatCard(
-                'Pending Approvals',
-                '12',
-                Icons.pending_actions,
-                Colors.orange,
-              ),
-              _buildStatCard(
-                'Total Reports',
-                '567',
-                Icons.assessment,
-                Colors.purple,
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
           // Recent Activity
-          const Text(
-            'Recent Activity',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: 5,
-              separatorBuilder: (context, index) => const Divider(),
-              itemBuilder: (context, index) {
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.green[100],
-                    child: Icon(Icons.person_add, color: Colors.green[700]),
-                  ),
-                  title: Text('New User Registration #${1000 + index}'),
-                  subtitle: Text('2 hours ago'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.check_circle_outline),
-                    color: Colors.green,
-                    onPressed: () {
-                      // Handle approval
+          Center(
+            child: Column(
+              children: [
+                const Text(
+                  'Recent Activity',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: 5,
+                    separatorBuilder: (context, index) => const Divider(),
+                    itemBuilder: (context, index) {
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.green[100],
+                          child: Icon(
+                            Icons.person_add,
+                            color: Colors.green[700],
+                          ),
+                        ),
+                        title: Text('New User Registration #${1000 + index}'),
+                        subtitle: Text('2 hours ago'),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.check_circle_outline),
+                          color: Colors.green,
+                          onPressed: () {
+                            // Handle approval
+                          },
+                        ),
+                      );
                     },
                   ),
-                );
-              },
+                ),
+              ],
             ),
           ),
         ],
@@ -127,31 +149,46 @@ class _AdminDashboardState extends State<AdminDashboard> {
     IconData icon,
     Color color,
   ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 32, color: color),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
+    return StatefulBuilder(
+      builder: (context, setState) {
+        bool isHovered = false;
+        return MouseRegion(
+          onEnter: (_) => setState(() => isHovered = true),
+          onExit: (_) => setState(() => isHovered = false),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            transform:
+                Matrix4.identity()..translate(0.0, isHovered ? -5.0 : 0.0, 0.0),
+            child: Card(
+              elevation: isHovered ? 8 : 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 32, color: color),
+                    const SizedBox(height: 8),
+                    Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      title,
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: TextStyle(color: Colors.grey[600], fontSize: 14),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -163,7 +200,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           // Sidebar
           NavigationRail(
             extended: true,
-            backgroundColor: Colors.green,
+            backgroundColor: const Color(0xFF2D7204),
             selectedIndex: _selectedIndex,
             onDestinationSelected: (int index) {
               setState(() {
