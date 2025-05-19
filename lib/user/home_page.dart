@@ -6,6 +6,7 @@ import 'disease_details_page.dart';
 import 'profile_page.dart';
 import 'user_request_list.dart';
 import 'scan_page.dart';
+import '../shared/review_manager.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -17,6 +18,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final ImagePicker _picker = ImagePicker();
   int _selectedIndex = 0;
+  final ReviewManager _reviewManager = ReviewManager();
 
   final List<Widget> _pages = [
     // Home
@@ -28,7 +30,9 @@ class _HomePageState extends State<HomePage> {
   ];
 
   int get _pendingCount =>
-      userRequests.where((r) => r['status'] == 'pending_review').length;
+      _reviewManager.pendingReviews
+          .where((r) => r['status'] == 'pending')
+          .length;
 
   // Disease information
   final Map<String, Map<String, dynamic>> diseaseInfo = {

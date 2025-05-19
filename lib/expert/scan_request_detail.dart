@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:async';
+import '../shared/review_manager.dart';
 
 class ScanRequestDetail extends StatefulWidget {
   final Map<String, dynamic> request;
@@ -23,6 +24,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
   List<String> _selectedPreventiveMeasures = [];
   DateTime _nextScanDate = DateTime.now().add(const Duration(days: 7));
   bool _isEditing = false;
+  final ReviewManager _reviewManager = ReviewManager();
 
   final List<String> _preventiveMeasures = [
     'Regular pruning',
@@ -53,43 +55,42 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
       _isSubmitting = true;
     });
 
-    // Simulate network delay
-    Future.delayed(const Duration(seconds: 1), () {
-      // Update the request data
-      final updatedRequest = Map<String, dynamic>.from(widget.request);
-      updatedRequest['status'] = 'completed';
-      updatedRequest['expertReview'] = {
-        'comment': _commentController.text,
-        'severityAssessment': {
-          'level': _selectedSeverity,
-          'confidence':
-              widget.request['diseaseSummary'][0]['averageConfidence'],
-          'notes': 'Expert assessment based on image analysis',
-        },
-        'treatmentPlan': {
-          'recommendations': [
-            {
-              'treatment': _treatmentController.text,
-              'dosage': _dosageController.text,
-              'frequency': _frequencyController.text,
-              'precautions': _precautionsController.text,
-            },
-          ],
-          'preventiveMeasures': _selectedPreventiveMeasures,
-        },
-      };
+    final expertReview = {
+      'comment': _commentController.text,
+      'severityAssessment': {
+        'level': _selectedSeverity,
+        'confidence': widget.request['diseaseSummary'][0]['averageConfidence'],
+        'notes': 'Expert assessment based on image analysis',
+      },
+      'treatmentPlan': {
+        'recommendations': [
+          {
+            'treatment': _treatmentController.text,
+            'dosage': _dosageController.text,
+            'frequency': _frequencyController.text,
+            'precautions': _precautionsController.text,
+          },
+        ],
+        'preventiveMeasures': _selectedPreventiveMeasures,
+      },
+    };
 
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Review submitted successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
+    _reviewManager.updateReview(
+      reviewId: widget.request['id'],
+      status: 'reviewed',
+      expertReview: expertReview,
+    );
 
-      // Go back to the list with the updated request
-      Navigator.pop(context, updatedRequest);
-    });
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Review submitted successfully'),
+        backgroundColor: Colors.green,
+      ),
+    );
+
+    // Go back to the list
+    Navigator.pop(context);
   }
 
   void _startEditing() {
@@ -175,6 +176,18 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
           itemCount: images.length,
           itemBuilder: (context, index) {
             final image = images[index];
+            final imagePath = image['path'] as String;
+            final detections =
+                (image['detections'] as List<dynamic>?)
+                    ?.where(
+                      (d) =>
+                          d != null &&
+                          d['disease'] != null &&
+                          d['confidence'] != null,
+                    )
+                    .toList() ??
+                [];
+
             return GestureDetector(
               onTap: () {
                 showDialog(
@@ -187,48 +200,48 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                             final imageHeight = constraints.maxHeight;
                             return Stack(
                               children: [
-                                Image.asset(
-                                  image['path'],
-                                  fit: BoxFit.contain,
-                                  width: imageWidth,
-                                  height: imageHeight,
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.file(
+                                    File(imagePath),
+                                    fit: BoxFit.contain,
+                                    width: imageWidth,
+                                    height: imageHeight,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        color: Colors.grey[200],
+                                        child: const Icon(
+                                          Icons.image_not_supported,
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
-                                if (_showBoundingBoxes &&
-                                    image['detections'] != null)
-                                  ...image['detections'].map<Widget>((
-                                    detection,
-                                  ) {
-                                    final box = detection['boundingBox'];
-                                    return Positioned(
-                                      left: box['left'] * imageWidth,
-                                      top: box['top'] * imageHeight,
-                                      width:
-                                          (box['right'] - box['left']) *
-                                          imageWidth,
-                                      height:
-                                          (box['bottom'] - box['top']) *
-                                          imageHeight,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          border: Border.all(
-                                            color: Colors.red,
-                                            width: 2,
-                                          ),
-                                        ),
-                                        child: Center(
-                                          child: Text(
-                                            '${detection['label']}\n${(detection['confidence'] * 100).toStringAsFixed(1)}%',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              backgroundColor: Colors.black54,
-                                              fontSize: 12,
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
+                                if (_showBoundingBoxes)
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
                                       ),
-                                    );
-                                  }).toList(),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.7),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        detections.isNotEmpty
+                                            ? '${detections.length} Detections'
+                                            : 'No Detections',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ),
                                 Positioned(
                                   top: 8,
                                   right: 8,
@@ -247,58 +260,46 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                       ),
                 );
               },
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final imageWidth = constraints.maxWidth;
-                  final imageHeight = constraints.maxHeight;
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.asset(image['path'], fit: BoxFit.contain),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(
+                      File(imagePath),
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[200],
+                          child: const Icon(Icons.image_not_supported),
+                        );
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
                       ),
-                      if (_showBoundingBoxes && image['detections'] != null)
-                        ...image['detections'].map<Widget>((detection) {
-                          final box = detection['boundingBox'];
-                          return Positioned(
-                            left: box['left'] * imageWidth,
-                            top: box['top'] * imageHeight,
-                            width: (box['right'] - box['left']) * imageWidth,
-                            height: (box['bottom'] - box['top']) * imageHeight,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.red, width: 1),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      if (image['detections'] != null &&
-                          image['detections'].isNotEmpty)
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.5),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${image['detections'].length}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        detections.isNotEmpty
+                            ? '${detections.length} Detections'
+                            : 'No Detections',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
                         ),
-                    ],
-                  );
-                },
+                      ),
+                    ),
+                  ),
+                ],
               ),
             );
           },
@@ -307,18 +308,42 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
     );
   }
 
+  // Helper to merge disease summary entries with the same disease
+  List<Map<String, dynamic>> _mergeDiseaseSummary(List<dynamic> summary) {
+    final Map<String, Map<String, dynamic>> merged = {};
+    for (final entry in summary) {
+      final disease = entry['label'] ?? entry['disease'] ?? entry['name'];
+      final count = entry['count'] ?? 0;
+      final percentage = entry['percentage'] ?? 0.0;
+      if (!merged.containsKey(disease)) {
+        merged[disease] = {
+          'disease': disease,
+          'count': count,
+          'percentage': percentage,
+        };
+      } else {
+        merged[disease]!['count'] += count;
+        merged[disease]!['percentage'] += percentage;
+      }
+    }
+    return merged.values.toList();
+  }
+
   Widget _buildDiseaseSummary() {
-    final diseaseSummary = widget.request['diseaseSummary'] as List<dynamic>;
+    final rawSummary = widget.request['diseaseSummary'] as List<dynamic>? ?? [];
+    final diseaseSummary = _mergeDiseaseSummary(rawSummary);
     final totalLeaves = diseaseSummary.fold<int>(
       0,
-      (sum, disease) => sum + (disease['count'] as int),
+      (sum, disease) => sum + (disease['count'] as int? ?? 0),
     );
 
     // Sort diseases by percentage in descending order
     final sortedDiseases =
         diseaseSummary.toList()..sort((a, b) {
-          final percentageA = (a['count'] as int) / totalLeaves;
-          final percentageB = (b['count'] as int) / totalLeaves;
+          final percentageA =
+              (a['count'] as int? ?? 0) / (totalLeaves == 0 ? 1 : totalLeaves);
+          final percentageB =
+              (b['count'] as int? ?? 0) / (totalLeaves == 0 ? 1 : totalLeaves);
           return percentageB.compareTo(percentageA);
         });
 
@@ -331,11 +356,11 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
         ),
         const SizedBox(height: 16),
         ...sortedDiseases.map((disease) {
-          final color = _getDiseaseColor(disease['name']);
-          final count = disease['count'] as int;
-          final percentage = count / totalLeaves;
-          final isHealthy =
-              disease['name'].toString().toLowerCase() == 'healthy';
+          final diseaseName = disease['disease']?.toString() ?? 'Unknown';
+          final color = _getDiseaseColor(diseaseName);
+          final count = disease['count'] as int? ?? 0;
+          final percentage = totalLeaves == 0 ? 0.0 : count / totalLeaves;
+          final isHealthy = diseaseName.toLowerCase() == 'healthy';
 
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
@@ -344,7 +369,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                 if (isHealthy) {
                   _showHealthyStatus(context);
                 } else {
-                  _showDiseaseRecommendations(context, disease['name']);
+                  _showDiseaseRecommendations(context, diseaseName);
                 }
               },
               child: Padding(
@@ -374,7 +399,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            disease['name'],
+                            _formatExpertLabel(diseaseName),
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -439,35 +464,6 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            isHealthy
-                                ? Icons.info_outline
-                                : Icons.medical_services_outlined,
-                            color: color,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            isHealthy ? 'View Status' : 'See Recommendation',
-                            style: TextStyle(
-                              color: color,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),
@@ -1184,14 +1180,11 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
 
   @override
   Widget build(BuildContext context) {
-    final userName =
-        (widget.request['userName'] != null &&
-                (widget.request['userName'] as String).trim().isNotEmpty)
-            ? widget.request['userName']
-            : '(No Name)';
-    final submittedAt = widget.request['submittedAt'] ?? '';
-    final reviewedAt = widget.request['expertReview']?['reviewedAt'] ?? '';
-    final isCompleted = widget.request['status'] == 'completed';
+    final userName = widget.request['userName']?.toString() ?? 'Asif';
+    final submittedAt = widget.request['submittedAt']?.toString() ?? '';
+    final reviewedAt =
+        widget.request['expertReview']?['reviewedAt']?.toString() ?? '';
+    final isCompleted = widget.request['status']?.toString() == 'reviewed';
     final totalImages = widget.request['images']?.length ?? 0;
     final totalDetections = widget.request['diseaseSummary']?.length ?? 0;
 
@@ -1385,7 +1378,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
             Padding(
               padding: const EdgeInsets.all(16),
               child:
-                  widget.request['status'] == 'pending_review'
+                  widget.request['status']?.toString() == 'pending'
                       ? _buildReviewForm()
                       : _buildCompletedReview(),
             ),
@@ -1393,5 +1386,31 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
         ),
       ),
     );
+  }
+
+  String _formatExpertLabel(String label) {
+    switch (label.toLowerCase()) {
+      case 'backterial_blackspot':
+      case 'bacterial blackspot':
+      case 'bacterial black spot':
+        return 'Bacterial black spot';
+      case 'powdery_mildew':
+      case 'powdery mildew':
+        return 'Powdery Mildew';
+      case 'tip_burn':
+      case 'tip burn':
+        return 'Tip Burn';
+      default:
+        return label
+            .replaceAll('_', ' ')
+            .split(' ')
+            .map(
+              (word) =>
+                  word.isNotEmpty
+                      ? word[0].toUpperCase() + word.substring(1)
+                      : '',
+            )
+            .join(' ');
+    }
   }
 }

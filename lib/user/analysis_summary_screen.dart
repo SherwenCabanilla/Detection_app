@@ -4,6 +4,8 @@ import 'tflite_detector.dart';
 import 'detection_painter.dart';
 import 'detection_screen.dart';
 import 'detection_carousel_screen.dart';
+import '../shared/review_manager.dart';
+import '../shared/user_profile.dart';
 
 class AnalysisSummaryScreen extends StatefulWidget {
   final Map<int, List<DetectionResult>> allResults;
@@ -23,6 +25,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
   final Map<String, Size> imageSizes = {};
   bool showBoundingBoxes = false;
   bool _isSubmitting = false;
+  final ReviewManager _reviewManager = ReviewManager();
 
   @override
   void initState() {
@@ -68,100 +71,65 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     });
 
     try {
-      // Prepare the data in Firebase-friendly format
-      final summaryData = {
-        'metadata': {
-          'timestamp': DateTime.now().toIso8601String(),
-          'totalImages': widget.imagePaths.length,
-          'totalDetections': _getOverallDiseaseCount().values.fold(
-            0,
-            (a, b) => a + b,
+      final _userProfile = UserProfile();
+      final _reviewManager = ReviewManager();
+
+      // Convert detection results to the format expected by ReviewManager
+      final detections = <Map<String, dynamic>>[];
+      for (var i = 0; i < widget.allResults.length; i++) {
+        final results = widget.allResults[i] ?? [];
+        for (var result in results) {
+          detections.add({
+            'disease': result.label,
+            'confidence': result.confidence,
+            'imagePath': widget.imagePaths[i],
+          });
+        }
+      }
+
+      // Convert disease counts to the format expected by ReviewManager
+      final diseaseCounts =
+          widget.allResults.values.map((results) {
+            return {
+              'name': _formatLabel(results[0].label),
+              'label': results[0].label,
+              'count': results.length,
+            };
+          }).toList();
+
+      // Submit the review
+      await _reviewManager.submitForReview(
+        userId: _userProfile.userName,
+        imagePaths: widget.imagePaths,
+        detections: detections,
+        diseaseCounts: diseaseCounts,
+        notes: 'Analysis summary from user',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Analysis sent for review successfully!'),
+            backgroundColor: Colors.green,
           ),
-        },
-        'images':
-            widget.imagePaths.asMap().entries.map((entry) {
-              final index = entry.key;
-              final imagePath = entry.value;
-              final results = widget.allResults[index] ?? [];
-              final imageSize = imageSizes[imagePath] ?? const Size(1, 1);
-
-              return {
-                'imageId': 'image_$index', // Firebase-friendly ID
-                'path': imagePath,
-                'dimensions': {
-                  'width': imageSize.width,
-                  'height': imageSize.height,
-                },
-                'detections':
-                    results.asMap().entries.map((detectionEntry) {
-                      final detectionIndex = detectionEntry.key;
-                      final result = detectionEntry.value;
-                      return {
-                        'detectionId':
-                            'detection_${index}_$detectionIndex', // Firebase-friendly ID
-                        'label': result.label,
-                        'confidence': result.confidence,
-                        'boundingBox': {
-                          'left': result.boundingBox.left,
-                          'top': result.boundingBox.top,
-                          'right': result.boundingBox.right,
-                          'bottom': result.boundingBox.bottom,
-                        },
-                        'timestamp': DateTime.now().toIso8601String(),
-                      };
-                    }).toList(),
-              };
-            }).toList(),
-        'diseaseSummary':
-            _getOverallDiseaseCount().entries
-                .map(
-                  (entry) => {
-                    'diseaseId': entry.key.toLowerCase().replaceAll(
-                      ' ',
-                      '_',
-                    ), // Firebase-friendly ID
-                    'name': entry.key,
-                    'count': entry.value,
-                    'percentage': _getDiseasePercentage(
-                      entry.key,
-                      _getOverallDiseaseCount(),
-                    ),
-                    'severity': _getSeverityLevel(entry.key),
-                  },
-                )
-                .toList(),
-        'status': 'pending_review', // For tracking review status
-      };
-
-      // TODO: Replace with Firebase integration
-      // Simulate network delay
-      await Future.delayed(const Duration(seconds: 2));
-
-      if (!mounted) return;
-
-      setState(() {
-        _isSubmitting = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Summary sent for external review'),
-          backgroundColor: Colors.green,
-        ),
-      );
+        );
+        Navigator.pop(context);
+      }
     } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _isSubmitting = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to send summary: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sending for review: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
     }
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/user_profile.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({Key? key}) : super(key: key);
@@ -13,12 +14,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   bool _isLoading = false;
+  final _userProfile = UserProfile();
 
   @override
   void initState() {
     super.initState();
-    // TODO: Load existing user data here
-    _fullNameController.text = 'Guest User';
+    _fullNameController.text = _userProfile.userName;
     _addressController.text = '';
     _phoneController.text = '';
     _emailController.text = '';
@@ -28,6 +29,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
     setState(() {
       _isLoading = true;
     });
+
+    // Update user profile
+    _userProfile.updateUserName(_fullNameController.text);
 
     // Simulate network delay
     Future.delayed(const Duration(seconds: 1), () {

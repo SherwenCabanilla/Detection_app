@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../shared/review_manager.dart';
+import 'dart:io';
 
 final List<Map<String, dynamic>> userRequests = [
   {
@@ -350,11 +352,10 @@ class _UserRequestListState extends State<UserRequestList> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.asset(
+                    child: _buildImageWidget(
                       request['images'][0]['path'],
                       width: 80,
                       height: 80,
-                      fit: BoxFit.cover,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -456,14 +457,18 @@ class UserRequestDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mainDisease = request['diseaseSummary'][0]['name'];
-    final status = request['status'];
-    final submittedAt = request['submittedAt'];
-    final reviewedAt = request['reviewedAt'];
+    final diseaseSummary = (request['diseaseSummary'] as List?) ?? [];
+    final mainDisease =
+        (diseaseSummary.isNotEmpty && diseaseSummary[0]['name'] != null)
+            ? diseaseSummary[0]['name']
+            : 'Unknown';
+    final status = request['status'] ?? '';
+    final submittedAt = request['submittedAt'] ?? '';
+    final reviewedAt = request['reviewedAt'] ?? '';
     final expertReview = request['expertReview'];
-    final expertName = request['expertName'];
+    final expertName = request['expertName'] ?? '';
     final isCompleted = status == 'completed';
-    final images = request['images'] as List<dynamic>;
+    final images = (request['images'] as List?) ?? [];
 
     return Scaffold(
       appBar: AppBar(
@@ -541,7 +546,7 @@ class UserRequestDetail extends StatelessWidget {
                           ),
                         ],
                       ),
-                      if (isCompleted && reviewedAt != null) ...[
+                      if (isCompleted && reviewedAt.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Row(
                           children: [
@@ -600,15 +605,91 @@ class UserRequestDetail extends StatelessWidget {
                             crossAxisCount: 2,
                             crossAxisSpacing: 8,
                             mainAxisSpacing: 8,
-                            childAspectRatio: 1,
                           ),
                       itemCount: images.length,
                       itemBuilder: (context, idx) {
-                        return ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.asset(
-                            images[idx]['path'],
-                            fit: BoxFit.cover,
+                        final img = images[idx];
+                        final imgPath = img['path'] ?? '';
+                        final detections = (img['detections'] as List?) ?? [];
+                        return GestureDetector(
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder:
+                                  (context) => Dialog(
+                                    backgroundColor: Colors.transparent,
+                                    insetPadding: const EdgeInsets.all(16),
+                                    child: LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final imageWidth = constraints.maxWidth;
+                                        final imageHeight =
+                                            constraints.maxHeight;
+                                        return Stack(
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              child: _buildImageWidget(
+                                                imgPath,
+                                                width: imageWidth,
+                                                height: imageHeight,
+                                                fit: BoxFit.contain,
+                                              ),
+                                            ),
+                                            Positioned(
+                                              top: 8,
+                                              right: 8,
+                                              child: IconButton(
+                                                icon: const Icon(
+                                                  Icons.close,
+                                                  color: Colors.white,
+                                                ),
+                                                onPressed:
+                                                    () =>
+                                                        Navigator.pop(context),
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ),
+                            );
+                          },
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: _buildImageWidget(
+                                  imgPath,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.7),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    detections.isNotEmpty
+                                        ? '${detections.length} Detection${detections.length > 1 ? 's' : ''}'
+                                        : 'No Detections',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       },
@@ -619,123 +700,153 @@ class UserRequestDetail extends StatelessWidget {
             // Disease Summary
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Disease Summary',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  ...request['diseaseSummary'].map<Widget>((disease) {
-                    final color = _getDiseaseColor(disease['name']);
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 24,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    color: color.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.local_florist,
-                                      size: 16,
-                                      color: color,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    disease['name'],
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                if (disease['count'] != null)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: color.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      '${disease['count']} found',
-                                      style: TextStyle(
-                                        color: color,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            if (disease['averageConfidence'] != null)
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Average Confidence',
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                          child: LinearProgressIndicator(
-                                            value: disease['averageConfidence'],
-                                            backgroundColor: color.withOpacity(
-                                              0.1,
-                                            ),
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                  color,
-                                                ),
-                                            minHeight: 8,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    '${(disease['averageConfidence'] * 100).toStringAsFixed(1)}%',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: color,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                          ],
+              child: Builder(
+                builder: (context) {
+                  final mergedSummary = _mergeDiseaseSummary(diseaseSummary);
+                  final totalLeaves = mergedSummary.fold<int>(
+                    0,
+                    (sum, d) => sum + (d['count'] as int? ?? 0),
+                  );
+                  final sortedSummary = [...mergedSummary]..sort((a, b) {
+                    final percA =
+                        totalLeaves == 0
+                            ? 0.0
+                            : (a['count'] as int? ?? 0) / totalLeaves;
+                    final percB =
+                        totalLeaves == 0
+                            ? 0.0
+                            : (b['count'] as int? ?? 0) / totalLeaves;
+                    return percB.compareTo(percA);
+                  });
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Disease Summary',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    );
-                  }).toList(),
-                ],
+                      const SizedBox(height: 16),
+                      ...sortedSummary.map<Widget>((disease) {
+                        final diseaseName =
+                            (disease['disease'] ?? disease['name'] ?? 'Unknown')
+                                .toString();
+                        final count = disease['count'] ?? 0;
+                        final percentage =
+                            totalLeaves == 0 ? 0.0 : count / totalLeaves;
+                        final color = _getExpertDiseaseColor(diseaseName);
+                        final isHealthy =
+                            diseaseName.toLowerCase() == 'healthy';
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 24,
+                                      height: 24,
+                                      decoration: BoxDecoration(
+                                        color: color.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Center(
+                                        child: Icon(
+                                          isHealthy
+                                              ? Icons.check_circle
+                                              : Icons.local_florist,
+                                          size: 16,
+                                          color: color,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        _formatExpertLabel(diseaseName),
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: color.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        '$count found',
+                                        style: TextStyle(
+                                          color: color,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Percentage of Total Leaves',
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                            child: LinearProgressIndicator(
+                                              value: percentage,
+                                              backgroundColor: color
+                                                  .withOpacity(0.1),
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    color,
+                                                  ),
+                                              minHeight: 8,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      '${(percentage * 100).toStringAsFixed(1)}%',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: color,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  );
+                },
               ),
             ),
             // Expert Review Section
@@ -750,7 +861,7 @@ class UserRequestDetail extends StatelessWidget {
                         const Icon(Icons.person, color: Colors.green, size: 18),
                         const SizedBox(width: 6),
                         Text(
-                          expertName ?? 'Expert',
+                          expertName.isNotEmpty ? expertName : 'Expert',
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             color: Colors.green,
@@ -769,47 +880,51 @@ class UserRequestDetail extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     // Severity Assessment
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Severity Assessment',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                    if (expertReview['severityAssessment'] != null)
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Severity Assessment',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.warning,
-                                  color: _getSeverityColor(
-                                    expertReview['severityAssessment']['level'],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  expertReview['severityAssessment']['level']
-                                      .toString()
-                                      .toUpperCase(),
-                                  style: TextStyle(
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.warning,
                                     color: _getSeverityColor(
-                                      expertReview['severityAssessment']['level'],
+                                      expertReview['severityAssessment']['level'] ??
+                                          'low',
                                     ),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
                                   ),
-                                ),
-                              ],
-                            ),
-                          ],
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    (expertReview['severityAssessment']['level'] ??
+                                            'low')
+                                        .toString()
+                                        .toUpperCase(),
+                                    style: TextStyle(
+                                      color: _getSeverityColor(
+                                        expertReview['severityAssessment']['level'] ??
+                                            'low',
+                                      ),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                     const SizedBox(height: 16),
                     // Treatment Plan
                     if (expertReview['treatmentPlan'] != null)
@@ -827,55 +942,58 @@ class UserRequestDetail extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              ...expertReview['treatmentPlan']['recommendations'].map<
-                                Widget
-                              >((treatment) {
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (treatment['treatment'] != null)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 4,
-                                        ),
-                                        child: Text(
-                                          'Treatment: ${treatment['treatment']}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w500,
+                              ...((expertReview['treatmentPlan']['recommendations']
+                                          as List?) ??
+                                      [])
+                                  .map<Widget>((treatment) {
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        if (treatment['treatment'] != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 4,
+                                            ),
+                                            child: Text(
+                                              'Treatment: ${treatment['treatment']}',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                    if (treatment['dosage'] != null)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 4,
-                                        ),
-                                        child: Text(
-                                          'Dosage: ${treatment['dosage']}',
-                                        ),
-                                      ),
-                                    if (treatment['frequency'] != null)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 4,
-                                        ),
-                                        child: Text(
-                                          'Frequency: ${treatment['frequency']}',
-                                        ),
-                                      ),
-                                    if (treatment['precautions'] != null)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 4,
-                                        ),
-                                        child: Text(
-                                          'Precautions: ${treatment['precautions']}',
-                                        ),
-                                      ),
-                                    const SizedBox(height: 8),
-                                  ],
-                                );
-                              }).toList(),
+                                        if (treatment['dosage'] != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 4,
+                                            ),
+                                            child: Text(
+                                              'Dosage: ${treatment['dosage']}',
+                                            ),
+                                          ),
+                                        if (treatment['frequency'] != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 4,
+                                            ),
+                                            child: Text(
+                                              'Frequency: ${treatment['frequency']}',
+                                            ),
+                                          ),
+                                        if (treatment['precautions'] != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 4,
+                                            ),
+                                            child: Text(
+                                              'Precautions: ${treatment['precautions']}',
+                                            ),
+                                          ),
+                                        const SizedBox(height: 8),
+                                      ],
+                                    );
+                                  })
+                                  .toList(),
                             ],
                           ),
                         ),
@@ -902,7 +1020,9 @@ class UserRequestDetail extends StatelessWidget {
                                 spacing: 8,
                                 runSpacing: 8,
                                 children:
-                                    expertReview['treatmentPlan']['preventiveMeasures']
+                                    ((expertReview['treatmentPlan']['preventiveMeasures']
+                                                as List?) ??
+                                            [])
                                         .map<Widget>((measure) {
                                           return Chip(
                                             label: Text(measure.toString()),
@@ -918,31 +1038,32 @@ class UserRequestDetail extends StatelessWidget {
                       ),
                     const SizedBox(height: 16),
                     // Expert Comment
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Expert Comment',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                    if (expertReview['comment'] != null)
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Expert Comment',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              expertReview['comment'],
-                              style: const TextStyle(
-                                fontSize: 15,
-                                color: Colors.black87,
+                              const SizedBox(height: 8),
+                              Text(
+                                expertReview['comment'],
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.black87,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               )
@@ -979,21 +1100,62 @@ class UserRequestDetail extends StatelessWidget {
     }
   }
 
-  Color _getDiseaseColor(String disease) {
-    switch (disease.toLowerCase()) {
+  Color _getExpertDiseaseColor(String diseaseName) {
+    switch (diseaseName.toLowerCase()) {
       case 'anthracnose':
         return Colors.orange;
-      case 'gall midge':
+      case 'backterial_blackspot':
+      case 'bacterial blackspot':
+      case 'bacterial black spot':
         return Colors.purple;
+      case 'dieback':
+        return Colors.red;
       case 'healthy':
         return const Color.fromARGB(255, 2, 119, 252);
+      case 'powdery_mildew':
       case 'powdery mildew':
         return const Color.fromARGB(255, 9, 46, 2);
-      case 'red rust':
-        return Colors.red;
+      case 'tip_burn':
+      case 'tip burn':
+        return Colors.brown;
       default:
         return Colors.grey;
     }
+  }
+
+  String _formatExpertLabel(String label) {
+    switch (label.toLowerCase()) {
+      case 'backterial_blackspot':
+      case 'bacterial blackspot':
+        return 'Bacterial black spot';
+      case 'powdery_mildew':
+      case 'powdery mildew':
+        return 'Powdery Mildew';
+      case 'tip_burn':
+      case 'tip burn':
+        return 'Tip Burn';
+      default:
+        return label
+            .split('_')
+            .map((word) => word[0].toUpperCase() + word.substring(1))
+            .join(' ');
+    }
+  }
+
+  List<Map<String, dynamic>> _mergeDiseaseSummary(List<dynamic> summary) {
+    final Map<String, Map<String, dynamic>> merged = {};
+    for (final entry in summary) {
+      final rawName = entry['disease'] ?? entry['name'] ?? 'Unknown';
+      final disease =
+          rawName.toString().toLowerCase().replaceAll('_', ' ').trim();
+      final count = entry['count'] ?? 0;
+      if (!merged.containsKey(disease)) {
+        merged[disease] = {'disease': rawName, 'count': count};
+      } else {
+        merged[disease]!['count'] += count;
+      }
+    }
+    return merged.values.toList();
   }
 }
 
@@ -1009,6 +1171,7 @@ class _UserRequestTabbedListState extends State<UserRequestTabbedList>
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  final ReviewManager _reviewManager = ReviewManager();
 
   @override
   void initState() {
@@ -1040,6 +1203,32 @@ class _UserRequestTabbedListState extends State<UserRequestTabbedList>
           status.contains(query) ||
           submittedAt.contains(query);
     }).toList();
+  }
+
+  List<Map<String, dynamic>> _getPendingRequests() {
+    // Get in-memory pending reviews from ReviewManager
+    final pending =
+        _reviewManager.pendingReviews
+            .where((r) => r['status'] == 'pending')
+            .map((review) => _mapReviewToRequest(review))
+            .toList();
+    return pending;
+  }
+
+  Map<String, dynamic> _mapReviewToRequest(Map<String, dynamic> review) {
+    // Map ReviewManager review to the format expected by the card UI
+    return {
+      'requestId': review['id'],
+      'userId': review['userId'],
+      'userName': review['userName'],
+      'submittedAt': review['submittedAt'],
+      'status':
+          review['status'] == 'pending' ? 'pending_review' : review['status'],
+      'images': review['images'],
+      'diseaseSummary': review['diseaseSummary'],
+      'expertReview': review['expertReview'],
+      'notes': review['notes'],
+    };
   }
 
   Widget _buildSearchBar() {
@@ -1109,9 +1298,7 @@ class _UserRequestTabbedListState extends State<UserRequestTabbedList>
 
   @override
   Widget build(BuildContext context) {
-    final pending = _filterRequests(
-      userRequests.where((r) => r['status'] == 'pending_review').toList(),
-    );
+    final pending = _filterRequests(_getPendingRequests());
     final completed = _filterRequests(
       userRequests.where((r) => r['status'] == 'completed').toList(),
     );
@@ -1183,4 +1370,38 @@ class _UserRequestTabbedListState extends State<UserRequestTabbedList>
       ),
     );
   }
+}
+
+Widget _buildImageWidget(
+  String path, {
+  double? width,
+  double? height,
+  BoxFit fit = BoxFit.cover,
+}) {
+  if (_isFilePath(path)) {
+    return Image.file(
+      File(path),
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder:
+          (context, error, stackTrace) =>
+              const Icon(Icons.broken_image, size: 40, color: Colors.grey),
+    );
+  } else {
+    return Image.asset(
+      path,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder:
+          (context, error, stackTrace) =>
+              const Icon(Icons.broken_image, size: 40, color: Colors.grey),
+    );
+  }
+}
+
+bool _isFilePath(String path) {
+  // Heuristic: treat as file path if it is absolute or starts with /data/ or C:/ or similar
+  return path.startsWith('/') || path.contains(':');
 }

@@ -33,7 +33,7 @@ class TFLiteDetector {
     final newH = (srcH * scale).round();
     final resized = img.copyResize(src, width: newW, height: newH);
     final out = img.Image(targetW, targetH);
-    img.fill(out, img.getColor(0, 0, 0));
+    img.fill(out, 0);
     final dx = ((targetW - newW) / 2).round();
     final dy = ((targetH - newH) / 2).round();
     img.copyInto(out, resized, dstX: dx, dstY: dy);

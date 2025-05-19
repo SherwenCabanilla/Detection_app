@@ -10,13 +10,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  camera: ^0.10.5+9
+  camera: ^0.10.5+5
   tflite_flutter: ^0.10.1
-  path_provider: ^2.0.8 # For storing captured images locally
+  path_provider: ^2.1.1
   image_picker: ^0.8.5+3 # Optional: if you want to pick images from the gallery
-  image: ^3.0.1 # For image processing (resizing, etc.)
+  image: ^3.0.1
   cupertino_icons: ^1.0.8 # For iOS style icons
   fl_chart: ^0.66.2
+  uuid: ^4.2.1
 
 dev_dependencies:
   flutter_test:
