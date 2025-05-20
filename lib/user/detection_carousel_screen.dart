@@ -218,7 +218,7 @@ class _DetectionCarouselScreenState extends State<DetectionCarouselScreen> {
                 CustomPaint(
                   painter: DetectionPainter(
                     results: results,
-                    originalImageSize: Size(416, 416), // YOLO detection space
+                    originalImageSize: imageSize,
                     displayedImageSize: displayedImageSize,
                     displayedImageOffset: displayedImageOffset,
                     debugMode: true, // Enable debug mode for visibility
@@ -443,10 +443,7 @@ class _DetectionCarouselScreenState extends State<DetectionCarouselScreen> {
                               return DetectionScreen(
                                 imagePath: widget.imagePaths[index],
                                 results: results,
-                                imageSize: Size(
-                                  416,
-                                  416,
-                                ), // YOLO space is 416x416
+                                imageSize: imageSize,
                                 showAppBar: true,
                                 showBoundingBoxes: showBoundingBoxes,
                               );

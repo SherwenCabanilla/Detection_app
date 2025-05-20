@@ -45,11 +45,13 @@ class DiseaseDetailsPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           // Disease Identified text
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
-              'Disease Identified',
-              style: TextStyle(
+              name.toLowerCase() == 'healthy'
+                  ? 'Plant Status'
+                  : 'Disease Identified',
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 24,
                 fontWeight: FontWeight.bold,

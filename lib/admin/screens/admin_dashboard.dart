@@ -4,6 +4,7 @@ import 'user_management.dart';
 // import 'expert_management.dart';
 import 'reports.dart';
 import 'settings.dart';
+import 'reports.dart' show DiseaseDistributionChart;
 
 class AdminDashboard extends StatefulWidget {
   final AdminUser adminUser;
@@ -16,6 +17,16 @@ class AdminDashboard extends StatefulWidget {
 class _AdminDashboardState extends State<AdminDashboard> {
   int _selectedIndex = 0;
   late List<Widget> _screens;
+
+  // Dummy data for disease distribution (same as in reports.dart)
+  final List<Map<String, dynamic>> _diseaseStats = [
+    {'name': 'Anthracnose', 'count': 156, 'percentage': 0.25},
+    {'name': 'Bacterial Blackspot', 'count': 98, 'percentage': 0.16},
+    {'name': 'Powdery Mildew', 'count': 145, 'percentage': 0.23},
+    {'name': 'Dieback', 'count': 70, 'percentage': 0.11},
+    {'name': 'Tip Burn (Unknown)', 'count': 42, 'percentage': 0.07},
+    {'name': 'Healthy', 'count': 112, 'percentage': 0.18},
+  ];
 
   @override
   void initState() {
@@ -33,31 +44,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Welcome Section
-          Center(
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Welcome, ${widget.adminUser.username}!',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Last login: ${widget.adminUser.lastLogin.toString()}',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                    ),
-                  ],
+          // Welcome Section (left-aligned, no card)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Welcome, ${widget.adminUser.username}!',
+                  style: const TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 8),
+                Text(
+                  'Last login: ${widget.adminUser.lastLogin.toString()}',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 24),
@@ -97,6 +104,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
           ),
           const SizedBox(height: 24),
+          // Disease Distribution Chart
+          DiseaseDistributionChart(diseaseStats: _diseaseStats),
 
           // Recent Activity
           Center(
@@ -194,46 +203,136 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Row(
-        children: [
-          // Sidebar
-          NavigationRail(
-            extended: true,
-            backgroundColor: const Color(0xFF2D7204),
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (int index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
-            destinations: const [
-              NavigationRailDestination(
-                icon: Icon(Icons.dashboard, color: Colors.white),
-                label: Text('Dashboard', style: TextStyle(color: Colors.white)),
+    final sidebarItems = [
+      {'icon': Icons.dashboard, 'label': 'Dashboard'},
+      {'icon': Icons.people, 'label': 'Users'},
+      {'icon': Icons.assessment, 'label': 'Reports'},
+      {'icon': Icons.settings, 'label': 'Settings'},
+    ];
+    int? hoveredIndex;
+    return StatefulBuilder(
+      builder: (context, setSidebarState) {
+        return Scaffold(
+          body: Row(
+            children: [
+              // Custom Sidebar
+              Container(
+                width: 220,
+                color: const Color(0xFF2D7204),
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24.0),
+                      child: Column(
+                        children: [
+                          Container(
+                            height: 80,
+                            width: 80,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 10,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: Image.asset(
+                                'assets/logo.png',
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Admin Panel',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Sidebar Items
+                    ...List.generate(sidebarItems.length, (index) {
+                      final selected = _selectedIndex == index;
+                      final hovered = hoveredIndex == index;
+                      Color bgColor = Colors.transparent;
+                      Color fgColor = Colors.white;
+                      FontWeight fontWeight = FontWeight.w500;
+                      if (selected) {
+                        bgColor = const Color.fromARGB(255, 200, 183, 25);
+                        fontWeight = FontWeight.bold;
+                      } else if (hovered) {
+                        bgColor = const Color.fromARGB(180, 200, 183, 25);
+                        fontWeight = FontWeight.w600;
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 6.0,
+                          horizontal: 12.0,
+                        ),
+                        child: MouseRegion(
+                          onEnter:
+                              (_) =>
+                                  setSidebarState(() => hoveredIndex = index),
+                          onExit:
+                              (_) => setSidebarState(() => hoveredIndex = null),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(32),
+                            onTap: () {
+                              setState(() {
+                                _selectedIndex = index;
+                              });
+                            },
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: bgColor,
+                                borderRadius: BorderRadius.circular(32),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 10,
+                                horizontal: 18,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    sidebarItems[index]['icon'] as IconData,
+                                    color: fgColor,
+                                    size: 28,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Text(
+                                    sidebarItems[index]['label'] as String,
+                                    style: TextStyle(
+                                      color: fgColor,
+                                      fontSize: 16,
+                                      fontWeight: fontWeight,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                    const Spacer(),
+                  ],
+                ),
               ),
-              NavigationRailDestination(
-                icon: Icon(Icons.people, color: Colors.white),
-                label: Text('Users', style: TextStyle(color: Colors.white)),
-              ),
-              // NavigationRailDestination(
-              //   icon: Icon(Icons.medical_services, color: Colors.white),
-              //   label: Text('Experts', style: TextStyle(color: Colors.white)),
-              // ),
-              NavigationRailDestination(
-                icon: Icon(Icons.assessment, color: Colors.white),
-                label: Text('Reports', style: TextStyle(color: Colors.white)),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.settings, color: Colors.white),
-                label: Text('Settings', style: TextStyle(color: Colors.white)),
-              ),
+              // Main Content
+              Expanded(child: _screens[_selectedIndex]),
             ],
           ),
-          // Main Content
-          Expanded(child: _screens[_selectedIndex]),
-        ],
-      ),
+        );
+      },
     );
   }
 }

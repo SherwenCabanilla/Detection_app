@@ -2,4 +2,4 @@ backterial_blackspot
 dieback
 healthy
 powdery_mildew
-anthracnose
+tip_burn

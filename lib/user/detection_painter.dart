@@ -55,17 +55,29 @@ class DetectionPainter extends CustomPainter {
         '📦 Original box in YOLO space: $box for ${result.label} (${result.confidence})',
       );
 
-      // The boxes are in 416x416 YOLO space, scale to the displayed image size
-      final scaleX = displayedImageSize!.width / 416.0;
-      final scaleY = displayedImageSize!.height / 416.0;
-      final offset = displayedImageOffset!;
+      // Calculate the aspect ratio of the original image
+      final imageAspect = originalImageSize.width / originalImageSize.height;
+      final displayAspect =
+          displayedImageSize!.width / displayedImageSize!.height;
 
-      // Scale the box from 416x416 to the displayed image size
+      // Calculate scaling factors while maintaining aspect ratio
+      double scaleX, scaleY;
+      if (imageAspect > displayAspect) {
+        // Image is wider than display
+        scaleX = displayedImageSize!.width / originalImageSize.width;
+        scaleY = scaleX;
+      } else {
+        // Image is taller than display
+        scaleY = displayedImageSize!.height / originalImageSize.height;
+        scaleX = scaleY;
+      }
+
+      // Scale the box from YOLO space to the displayed image size
       final rect = Rect.fromLTRB(
-        box.left * scaleX + offset.dx,
-        box.top * scaleY + offset.dy,
-        box.right * scaleX + offset.dx,
-        box.bottom * scaleY + offset.dy,
+        box.left * scaleX + displayedImageOffset!.dx,
+        box.top * scaleY + displayedImageOffset!.dy,
+        box.right * scaleX + displayedImageOffset!.dx,
+        box.bottom * scaleY + displayedImageOffset!.dy,
       );
 
       print('📦 Scaled rect on screen: $rect');
@@ -75,68 +87,68 @@ class DetectionPainter extends CustomPainter {
           Paint()
             ..color = color
             ..style = PaintingStyle.stroke
-            ..strokeWidth = debugMode ? 5.0 : 3.0; // Thicker when debugging
+            ..strokeWidth = 2.0; // Thinner line for better appearance
 
       // Draw the rectangle
       canvas.drawRect(rect, paint);
 
-      // Add a slightly transparent fill for visibility
+      // Add a very subtle fill for visibility
       if (debugMode) {
         final fillPaint =
             Paint()
-              ..color = color.withOpacity(0.3)
+              ..color = color.withOpacity(0.1) // More transparent fill
               ..style = PaintingStyle.fill;
         canvas.drawRect(rect, fillPaint);
       }
 
       // Draw corner dots and disease label when in debug mode
       if (debugMode) {
-        // Corner dots
-        final dotPaint = Paint()..color = Colors.yellow;
-        canvas.drawCircle(Offset(rect.left, rect.top), 5, dotPaint);
+        // Corner dots - smaller and more subtle
+        final dotPaint = Paint()..color = Colors.yellow.withOpacity(0.7);
+        canvas.drawCircle(Offset(rect.left, rect.top), 3, dotPaint);
         canvas.drawCircle(
           Offset(rect.right, rect.top),
-          5,
-          dotPaint..color = Colors.red,
+          3,
+          dotPaint..color = Colors.red.withOpacity(0.7),
         );
         canvas.drawCircle(
           Offset(rect.left, rect.bottom),
-          5,
-          dotPaint..color = Colors.green,
+          3,
+          dotPaint..color = Colors.green.withOpacity(0.7),
         );
         canvas.drawCircle(
           Offset(rect.right, rect.bottom),
-          5,
-          dotPaint..color = Colors.blue,
+          3,
+          dotPaint..color = Colors.blue.withOpacity(0.7),
         );
 
-        // Draw label with confidence
+        // Draw label with confidence - more compact
         final textPainter = TextPainter(
           text: TextSpan(
             text: '${result.label} (${(result.confidence * 100).toInt()}%)',
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
+              fontSize: 12, // Smaller font
+              fontWeight: FontWeight.w500, // Less bold
             ),
           ),
           textDirection: TextDirection.ltr,
         );
         textPainter.layout();
 
-        // Background for text
+        // Background for text - more compact
         canvas.drawRect(
           Rect.fromLTWH(
             rect.left,
-            rect.top - 22,
-            textPainter.width + 8,
-            textPainter.height + 4,
+            rect.top - 18, // Reduced height
+            textPainter.width + 6, // Reduced padding
+            textPainter.height + 2, // Reduced padding
           ),
-          Paint()..color = Colors.black.withOpacity(0.7),
+          Paint()..color = Colors.black.withOpacity(0.6), // More transparent
         );
 
         // Text
-        textPainter.paint(canvas, Offset(rect.left + 4, rect.top - 20));
+        textPainter.paint(canvas, Offset(rect.left + 3, rect.top - 16));
       }
     }
   }

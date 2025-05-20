@@ -53,11 +53,10 @@ class _RealtimeDetectionScreenState extends State<RealtimeDetectionScreen> {
     try {
       // Convert YUV to RGB
       final rgb = _convertYUV420toImage(frame);
-      // Resize & save
-      final resized = img.copyResize(rgb, width: 416, height: 416);
+      // Save the frame
       final dir = await getTemporaryDirectory();
       final path = '${dir.path}/frame.jpg';
-      await File(path).writeAsBytes(img.encodeJpg(resized));
+      await File(path).writeAsBytes(img.encodeJpg(rgb));
 
       // Run detection
       final detections = await _detector.detectDiseases(path);
@@ -351,7 +350,7 @@ class _DetectionScreenState extends State<DetectionScreen> {
                         return CustomPaint(
                           painter: DetectionPainter(
                             results: _results!,
-                            originalImageSize: Size(416, 416), // YOLO space
+                            originalImageSize: _imageSize!,
                             displayedImageSize: Size(scaledW, scaledH),
                             displayedImageOffset: Offset(dx, dy),
                             debugMode: true,

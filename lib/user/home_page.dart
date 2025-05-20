@@ -82,16 +82,8 @@ class _HomePageState extends State<HomePage> {
     },
     'Healthy': {
       'scientificName': '',
-      'symptoms': [
-        'Vibrant green leaves without spots or lesions',
-        'Normal growth pattern',
-        'No visible signs of disease or pest damage',
-      ],
-      'treatments': [
-        'Regular monitoring for early detection of problems',
-        'Maintain proper irrigation and fertilization',
-        'Practice good orchard sanitation',
-      ],
+      'symptoms': ['N/A'],
+      'treatments': ['N/A'],
     },
     'Tip Burn': {
       'scientificName': 'Physiological / Nutritional Leaf Disorder',
