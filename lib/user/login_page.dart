@@ -328,7 +328,10 @@ class _LoginPageState extends State<LoginPage> {
                         },
                         child: const Text(
                           'Admin',
-                          style: TextStyle(color: Colors.white24, fontSize: 12),
+                          style: TextStyle(
+                            color: Color.fromARGB(20, 255, 255, 255),
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ),
