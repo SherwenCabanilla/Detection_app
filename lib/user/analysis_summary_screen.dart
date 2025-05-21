@@ -83,6 +83,12 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
             'disease': result.label,
             'confidence': result.confidence,
             'imagePath': widget.imagePaths[i],
+            'boundingBox': {
+              'left': result.boundingBox.left,
+              'top': result.boundingBox.top,
+              'right': result.boundingBox.right,
+              'bottom': result.boundingBox.bottom,
+            },
           });
         }
       }
@@ -113,7 +119,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context);
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (e) {
       if (mounted) {
@@ -498,7 +504,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Row(
                           children: [
@@ -523,37 +529,24 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                        const Text(
-                          'Plant Health Status',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                        const SizedBox(height: 40),
+                        const Center(
+                          child: Text(
+                            'N/A',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        _buildStatusSection('Current Status', [
-                          'Leaves show no signs of disease',
-                          'Normal leaf color and texture',
-                          'Proper leaf development',
-                          'No visible damage or discoloration',
-                        ]),
-                        const SizedBox(height: 16),
-                        _buildStatusSection('Maintenance Tips', [
-                          'Continue regular watering schedule',
-                          'Maintain proper fertilization',
-                          'Monitor for any changes in leaf appearance',
-                          'Keep up with regular pruning',
-                          'Ensure adequate sunlight exposure',
-                        ]),
-                        const SizedBox(height: 16),
-                        _buildStatusSection('Preventive Care', [
-                          'Regular plant inspection',
-                          'Maintain optimal growing conditions',
-                          'Proper spacing between plants',
-                          'Good air circulation',
-                          'Regular soil testing',
-                        ]),
+                        const SizedBox(height: 8),
+                        const Center(
+                          child: Text(
+                            'No additional information for healthy leaves.',
+                            style: TextStyle(fontSize: 16, color: Colors.grey),
+                          ),
+                        ),
                       ],
                     ),
                   ),

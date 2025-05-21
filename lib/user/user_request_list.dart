@@ -451,24 +451,31 @@ class _UserRequestListState extends State<UserRequestList> {
   }
 }
 
-class UserRequestDetail extends StatelessWidget {
+class UserRequestDetail extends StatefulWidget {
   final Map<String, dynamic> request;
   const UserRequestDetail({Key? key, required this.request}) : super(key: key);
 
   @override
+  _UserRequestDetailState createState() => _UserRequestDetailState();
+}
+
+class _UserRequestDetailState extends State<UserRequestDetail> {
+  bool _showBoundingBoxes = true;
+
+  @override
   Widget build(BuildContext context) {
-    final diseaseSummary = (request['diseaseSummary'] as List?) ?? [];
+    final diseaseSummary = (widget.request['diseaseSummary'] as List?) ?? [];
     final mainDisease =
         (diseaseSummary.isNotEmpty && diseaseSummary[0]['name'] != null)
             ? diseaseSummary[0]['name']
             : 'Unknown';
-    final status = request['status'] ?? '';
-    final submittedAt = request['submittedAt'] ?? '';
-    final reviewedAt = request['reviewedAt'] ?? '';
-    final expertReview = request['expertReview'];
-    final expertName = request['expertName'] ?? '';
+    final status = widget.request['status'] ?? '';
+    final submittedAt = widget.request['submittedAt'] ?? '';
+    final reviewedAt = widget.request['reviewedAt'] ?? '';
+    final expertReview = widget.request['expertReview'];
+    final expertName = widget.request['expertName'] ?? '';
     final isCompleted = status == 'completed';
-    final images = (request['images'] as List?) ?? [];
+    final images = (widget.request['images'] as List?) ?? [];
 
     return Scaffold(
       appBar: AppBar(
@@ -579,6 +586,22 @@ class UserRequestDetail extends StatelessWidget {
                 ),
               ),
             ),
+            // Add bounding box toggle like expert view
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                const Text('Show Bounding Boxes'),
+                Switch(
+                  value: _showBoundingBoxes,
+                  onChanged: (value) {
+                    setState(() {
+                      _showBoundingBoxes = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             // Images Grid
             if (images.isNotEmpty)
               Padding(

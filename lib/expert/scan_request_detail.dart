@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:async';
 import '../shared/review_manager.dart';
+import '../user/detection_painter.dart';
+import '../user/tflite_detector.dart';
 
 class ScanRequestDetail extends StatefulWidget {
   final Map<String, dynamic> request;
@@ -188,6 +190,9 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                     .toList() ??
                 [];
 
+            print('🔍 Raw detections: ${image['detections']}');
+            print('✅ Filtered detections: $detections');
+
             return GestureDetector(
               onTap: () {
                 showDialog(
@@ -198,49 +203,49 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                           builder: (context, constraints) {
                             final imageWidth = constraints.maxWidth;
                             final imageHeight = constraints.maxHeight;
+
                             return Stack(
+                              fit: StackFit.expand,
                               children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.file(
-                                    File(imagePath),
-                                    fit: BoxFit.contain,
-                                    width: imageWidth,
-                                    height: imageHeight,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        color: Colors.grey[200],
-                                        child: const Icon(
-                                          Icons.image_not_supported,
+                                Image.file(
+                                  File(imagePath),
+                                  fit: BoxFit.contain,
+                                ),
+                                if (_showBoundingBoxes && detections.isNotEmpty)
+                                  FutureBuilder<Size>(
+                                    future: _getImageSize(
+                                      FileImage(File(imagePath)),
+                                    ),
+                                    builder: (context, snapshot) {
+                                      if (!snapshot.hasData) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      final imageSize = snapshot.data!;
+                                      return CustomPaint(
+                                        painter: DetectionPainter(
+                                          results:
+                                              detections
+                                                  .map(
+                                                    (d) => DetectionResult(
+                                                      label: d['disease'],
+                                                      confidence:
+                                                          d['confidence'],
+                                                      boundingBox: Rect.fromLTRB(
+                                                        d['boundingBox']['left'],
+                                                        d['boundingBox']['top'],
+                                                        d['boundingBox']['right'],
+                                                        d['boundingBox']['bottom'],
+                                                      ),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                          originalImageSize: imageSize,
+                                          displayedImageSize: imageSize,
+                                          displayedImageOffset: Offset.zero,
                                         ),
+                                        size: imageSize,
                                       );
                                     },
-                                  ),
-                                ),
-                                if (_showBoundingBoxes)
-                                  Positioned(
-                                    top: 8,
-                                    right: 8,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.7),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        detections.isNotEmpty
-                                            ? '${detections.length} Detections'
-                                            : 'No Detections',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
                                   ),
                                 Positioned(
                                   top: 8,
@@ -268,14 +273,86 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                     child: Image.file(
                       File(imagePath),
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey[200],
-                          child: const Icon(Icons.image_not_supported),
+                      width: double.infinity,
+                      height: double.infinity,
+                    ),
+                  ),
+                  if (_showBoundingBoxes && detections.isNotEmpty)
+                    FutureBuilder<Size>(
+                      future: _getImageSize(FileImage(File(imagePath))),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const SizedBox.shrink();
+                        }
+                        final imageSize = snapshot.data!;
+                        return LayoutBuilder(
+                          builder: (context, constraints) {
+                            // Calculate the actual displayed image size
+                            final imgW = imageSize.width;
+                            final imgH = imageSize.height;
+                            final widgetW = constraints.maxWidth;
+                            final widgetH = constraints.maxHeight;
+
+                            // Calculate scale and offset for BoxFit.cover
+                            final scale =
+                                imgW / imgH > widgetW / widgetH
+                                    ? widgetH /
+                                        imgH // Height constrained
+                                    : widgetW / imgW; // Width constrained
+
+                            final scaledW = imgW * scale;
+                            final scaledH = imgH * scale;
+                            final dx = (widgetW - scaledW) / 2;
+                            final dy = (widgetH - scaledH) / 2;
+
+                            return CustomPaint(
+                              painter: DetectionPainter(
+                                results:
+                                    detections
+                                        .map((d) {
+                                          if (d == null ||
+                                              d['disease'] == null ||
+                                              d['confidence'] == null ||
+                                              d['boundingBox'] == null ||
+                                              d['boundingBox']['left'] ==
+                                                  null ||
+                                              d['boundingBox']['top'] == null ||
+                                              d['boundingBox']['right'] ==
+                                                  null ||
+                                              d['boundingBox']['bottom'] ==
+                                                  null) {
+                                            return null;
+                                          }
+                                          return DetectionResult(
+                                            label: d['disease'].toString(),
+                                            confidence:
+                                                (d['confidence'] as num)
+                                                    .toDouble(),
+                                            boundingBox: Rect.fromLTRB(
+                                              (d['boundingBox']['left'] as num)
+                                                  .toDouble(),
+                                              (d['boundingBox']['top'] as num)
+                                                  .toDouble(),
+                                              (d['boundingBox']['right'] as num)
+                                                  .toDouble(),
+                                              (d['boundingBox']['bottom']
+                                                      as num)
+                                                  .toDouble(),
+                                            ),
+                                          );
+                                        })
+                                        .whereType<DetectionResult>()
+                                        .toList(),
+                                originalImageSize: imageSize,
+                                displayedImageSize: Size(scaledW, scaledH),
+                                displayedImageOffset: Offset(dx, dy),
+                              ),
+                              size: Size(widgetW, widgetH),
+                            );
+                          },
                         );
                       },
                     ),
-                  ),
                   Positioned(
                     top: 8,
                     right: 8,
@@ -294,7 +371,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                             : 'No Detections',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
                         ),
                       ),
                     ),
@@ -494,7 +571,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                   child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Row(
                           children: [
@@ -519,37 +596,24 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                        const Text(
-                          'Plant Health Status',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                        const SizedBox(height: 40),
+                        const Center(
+                          child: Text(
+                            'N/A',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        _buildStatusSection('Current Status', [
-                          'Leaves show no signs of disease',
-                          'Normal leaf color and texture',
-                          'Proper leaf development',
-                          'No visible damage or discoloration',
-                        ]),
-                        const SizedBox(height: 16),
-                        _buildStatusSection('Maintenance Tips', [
-                          'Continue regular watering schedule',
-                          'Maintain proper fertilization',
-                          'Monitor for any changes in leaf appearance',
-                          'Keep up with regular pruning',
-                          'Ensure adequate sunlight exposure',
-                        ]),
-                        const SizedBox(height: 16),
-                        _buildStatusSection('Preventive Care', [
-                          'Regular plant inspection',
-                          'Maintain optimal growing conditions',
-                          'Proper spacing between plants',
-                          'Good air circulation',
-                          'Regular soil testing',
-                        ]),
+                        const SizedBox(height: 8),
+                        const Center(
+                          child: Text(
+                            'No additional information for healthy leaves.',
+                            style: TextStyle(fontSize: 16, color: Colors.grey),
+                          ),
+                        ),
                       ],
                     ),
                   ),
