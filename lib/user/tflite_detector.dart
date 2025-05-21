@@ -1,5 +1,6 @@
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
+import 'dart:math';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'dart:io';
 import 'dart:ui' show Rect;
@@ -111,21 +112,43 @@ class TFLiteDetector {
         }
 
         if (maxConf > confidenceThreshold) {
-          final x = outputData[0][i];
-          final y = outputData[1][i];
-          final w = outputData[2][i];
-          final h = outputData[3][i];
+          // YOLO outputs normalized coordinates (0-1) for center point and dimensions
+          final centerX = outputData[0][i];
+          final centerY = outputData[1][i];
+          final width = outputData[2][i];
+          final height = outputData[3][i];
+
+          // Calculate letterboxing parameters
+          final scale = inputSize / max(image.width, image.height);
+          final newUnpaddedW = image.width * scale;
+          final newUnpaddedH = image.height * scale;
+          final padX = (inputSize - newUnpaddedW) / 2;
+          final padY = (inputSize - newUnpaddedH) / 2;
+
+          // Convert from YOLO normalized coordinates to original image coordinates
+          // First convert center point and dimensions to absolute coordinates in YOLO space
+          final yoloCenterX = centerX * inputSize;
+          final yoloCenterY = centerY * inputSize;
+          final yoloWidth = width * inputSize;
+          final yoloHeight = height * inputSize;
+
+          // Remove padding and scale back to original image space
+          final originalCenterX = (yoloCenterX - padX) / scale;
+          final originalCenterY = (yoloCenterY - padY) / scale;
+          final originalWidth = yoloWidth / scale;
+          final originalHeight = yoloHeight / scale;
+
+          // Convert center point and dimensions to LTRB format
+          final left = originalCenterX - (originalWidth / 2);
+          final top = originalCenterY - (originalHeight / 2);
+          final right = originalCenterX + (originalWidth / 2);
+          final bottom = originalCenterY + (originalHeight / 2);
 
           detections.add(
             DetectionResult(
               label: _getDiseaseLabel(maxClass),
               confidence: maxConf,
-              boundingBox: Rect.fromLTWH(
-                x * image.width,
-                y * image.height,
-                w * image.width,
-                h * image.height,
-              ),
+              boundingBox: Rect.fromLTRB(left, top, right, bottom),
             ),
           );
         }

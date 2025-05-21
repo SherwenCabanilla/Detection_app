@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'tflite_detector.dart';
 
@@ -47,13 +48,11 @@ class DetectionPainter extends CustomPainter {
     }
 
     for (var result in results) {
-      // Get the bounding box in YOLO 416x416 space
+      // Get the bounding box in original image space
       final box = result.boundingBox;
       final color = diseaseColors[result.label] ?? diseaseColors['Unknown']!;
 
-      print(
-        '📦 Original box in YOLO space: $box for ${result.label} (${result.confidence})',
-      );
+      print('📦 Original box: $box for ${result.label} (${result.confidence})');
 
       // Calculate the aspect ratio of the original image
       final imageAspect = originalImageSize.width / originalImageSize.height;
@@ -72,7 +71,7 @@ class DetectionPainter extends CustomPainter {
         scaleX = scaleY;
       }
 
-      // Scale the box from YOLO space to the displayed image size
+      // Scale the box from original image space to the displayed image size
       final rect = Rect.fromLTRB(
         box.left * scaleX + displayedImageOffset!.dx,
         box.top * scaleY + displayedImageOffset!.dy,
@@ -87,7 +86,7 @@ class DetectionPainter extends CustomPainter {
           Paint()
             ..color = color
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.0; // Thinner line for better appearance
+            ..strokeWidth = 2.0;
 
       // Draw the rectangle
       canvas.drawRect(rect, paint);
@@ -96,55 +95,33 @@ class DetectionPainter extends CustomPainter {
       if (debugMode) {
         final fillPaint =
             Paint()
-              ..color = color.withOpacity(0.1) // More transparent fill
+              ..color = color.withOpacity(0.1)
               ..style = PaintingStyle.fill;
         canvas.drawRect(rect, fillPaint);
-      }
 
-      // Draw corner dots and disease label when in debug mode
-      if (debugMode) {
-        // Corner dots - smaller and more subtle
-        final dotPaint = Paint()..color = Colors.yellow.withOpacity(0.7);
-        canvas.drawCircle(Offset(rect.left, rect.top), 3, dotPaint);
-        canvas.drawCircle(
-          Offset(rect.right, rect.top),
-          3,
-          dotPaint..color = Colors.red.withOpacity(0.7),
-        );
-        canvas.drawCircle(
-          Offset(rect.left, rect.bottom),
-          3,
-          dotPaint..color = Colors.green.withOpacity(0.7),
-        );
-        canvas.drawCircle(
-          Offset(rect.right, rect.bottom),
-          3,
-          dotPaint..color = Colors.blue.withOpacity(0.7),
-        );
-
-        // Draw label with confidence - more compact
+        // Draw label with confidence
         final textPainter = TextPainter(
           text: TextSpan(
             text: '${result.label} (${(result.confidence * 100).toInt()}%)',
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 12, // Smaller font
-              fontWeight: FontWeight.w500, // Less bold
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
             ),
           ),
           textDirection: TextDirection.ltr,
         );
         textPainter.layout();
 
-        // Background for text - more compact
+        // Background for text
         canvas.drawRect(
           Rect.fromLTWH(
             rect.left,
-            rect.top - 18, // Reduced height
-            textPainter.width + 6, // Reduced padding
-            textPainter.height + 2, // Reduced padding
+            rect.top - 18,
+            textPainter.width + 6,
+            textPainter.height + 2,
           ),
-          Paint()..color = Colors.black.withOpacity(0.6), // More transparent
+          Paint()..color = Colors.black.withOpacity(0.6),
         );
 
         // Text
