@@ -10,6 +10,7 @@ class Settings extends StatefulWidget {
 class _SettingsState extends State<Settings> {
   bool _emailNotifications = true;
   String _selectedLanguage = 'English';
+  String? _email = 'admin@example.com';
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +40,48 @@ class _SettingsState extends State<Settings> {
                       color: Colors.green,
                     ),
                   ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.email),
+                  title: const Text('Edit Email'),
+                  subtitle: Text(_email ?? 'admin@example.com'),
+                  onTap: () async {
+                    final newEmail = await showDialog<String>(
+                      context: context,
+                      builder: (context) {
+                        final controller = TextEditingController(
+                          text: _email ?? 'admin@example.com',
+                        );
+                        return AlertDialog(
+                          title: const Text('Edit Email'),
+                          content: TextField(
+                            controller: controller,
+                            decoration: const InputDecoration(
+                              labelText: 'Email',
+                            ),
+                            keyboardType: TextInputType.emailAddress,
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.pop(context, controller.text);
+                              },
+                              child: const Text('Save'),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                    if (newEmail != null && newEmail.isNotEmpty) {
+                      setState(() {
+                        _email = newEmail;
+                      });
+                    }
+                  },
                 ),
                 StatefulBuilder(
                   builder: (context, setState) {
@@ -134,9 +177,7 @@ class _SettingsState extends State<Settings> {
                         child: ListTile(
                           leading: const Icon(Icons.assessment),
                           title: const Text('View Reports'),
-                          subtitle: const Text(
-                            'Access system reports and analytics',
-                          ),
+                          subtitle: const Text('Access system reports'),
                           onTap: () {
                             // Navigate to reports
                           },

@@ -35,7 +35,7 @@ class AboutAppPage extends StatelessWidget {
                           shape: BoxShape.circle,
                           color: Colors.white,
                         ),
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(16),
                         child: Image.asset(
                           'assets/logo.png',
                           width: 80,

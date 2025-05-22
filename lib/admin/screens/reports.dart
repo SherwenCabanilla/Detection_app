@@ -40,99 +40,6 @@ class _ReportsState extends State<Reports> {
     {'name': 'Healthy', 'count': 112, 'percentage': 0.18},
   ];
 
-  // Dummy data for disease trends by year
-  final List<int> _years = [2023, 2024, 2025];
-  int _selectedYear = 2025;
-  final List<String> _allMonths = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  final Map<int, Map<String, List<int>>> _diseaseTrendsByYear = {
-    2023: {
-      'Anthracnose': [10, 15, 20, 30, 40, 50, 55, 60, 65, 70, 75, 80],
-      'Bacterial Blackspot': [5, 10, 15, 20, 25, 30, 32, 34, 36, 38, 40, 42],
-      'Powdery Mildew': [8, 12, 18, 25, 32, 40, 45, 50, 55, 60, 65, 70],
-      'Dieback': [2, 4, 8, 12, 16, 20, 22, 24, 26, 28, 30, 32],
-      'Tip Burn (Unknown)': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-      'Healthy': [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75],
-    },
-    2024: {
-      'Anthracnose': [15, 25, 35, 45, 60, 80, 90, 100, 110, 490, 580, 700],
-      'Bacterial Blackspot': [
-        8,
-        16,
-        24,
-        32,
-        40,
-        48,
-        50,
-        230,
-        270,
-        300,
-        359,
-        640,
-      ],
-      'Powdery Mildew': [
-        50,
-        70,
-        120,
-        150,
-        190,
-        230,
-        250,
-        270,
-        400,
-        450,
-        500,
-        600,
-      ],
-      'Dieback': [3, 6, 9, 12, 15, 18, 20, 22, 24, 230, 250, 300],
-      'Tip Burn (Unknown)': [2, 4, 6, 8, 10, 12, 13, 14, 15, 146, 260, 379],
-      'Healthy': [25, 30, 35, 40, 45, 50, 480, 500, 600, 700, 750, 800],
-    },
-    2025: {
-      'Anthracnose': [30, 45, 60, 80, 120, 156],
-      'Bacterial Blackspot': [10, 20, 40, 60, 80, 98],
-      'Powdery Mildew': [20, 40, 60, 90, 120, 145],
-      'Dieback': [5, 10, 20, 35, 50, 70],
-      'Tip Burn (Unknown)': [2, 8, 15, 25, 35, 42],
-      'Healthy': [40, 50, 60, 80, 100, 112],
-    },
-  };
-
-  final int _demoCurrentMonth = 5; // May (1=Jan, 5=May, 12=Dec)
-
-  // Helper to get months for the selected year
-  List<String> _getMonthsForYear(int year) {
-    final now = DateTime.now();
-    if (year == now.year) {
-      // For demo, use _demoCurrentMonth instead of now.month
-      return _allMonths.sublist(0, _demoCurrentMonth);
-    } else {
-      return List.from(_allMonths);
-    }
-  }
-
-  // Helper to pad or trim data arrays to match months
-  List<int> _padDataToMonths(List<int> data, int monthCount) {
-    if (data.length >= monthCount) {
-      return data.sublist(0, monthCount);
-    } else {
-      return List<int>.from(data)
-        ..addAll(List.filled(monthCount - data.length, 0));
-    }
-  }
-
   Color _getDiseaseColor(String disease) {
     switch (disease.toLowerCase()) {
       case 'anthracnose':
@@ -149,25 +56,6 @@ class _ReportsState extends State<Reports> {
         return const Color.fromARGB(255, 2, 119, 252);
       default:
         return Colors.grey;
-    }
-  }
-
-  Color _getDiseaseTrendColor(String disease) {
-    switch (disease.toLowerCase()) {
-      case 'anthracnose':
-        return Colors.orange;
-      case 'bacterial blackspot':
-        return Colors.red;
-      case 'powdery mildew':
-        return const Color.fromARGB(255, 9, 46, 2);
-      case 'dieback':
-        return Colors.brown;
-      case 'tip burn (unknown)':
-        return Colors.grey;
-      case 'healthy':
-        return const Color.fromARGB(255, 2, 119, 252);
-      default:
-        return Colors.black;
     }
   }
 
@@ -198,7 +86,7 @@ class _ReportsState extends State<Reports> {
                 ),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.list),
-                  label: const Text('View All Reports'),
+                  label: const Text('User activity'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                   ),
@@ -254,6 +142,7 @@ class _ReportsState extends State<Reports> {
                   value: _selectedTimeRange,
                   items:
                       [
+                            '1 Day',
                             'Last 7 Days',
                             'Last 30 Days',
                             'Last 90 Days',
@@ -332,204 +221,6 @@ class _ReportsState extends State<Reports> {
               ],
             ),
             const SizedBox(height: 32),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Disease Trends Over Time',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        DropdownButton<int>(
-                          value: _selectedYear,
-                          items:
-                              _years
-                                  .map(
-                                    (year) => DropdownMenuItem(
-                                      value: year,
-                                      child: Text(year.toString()),
-                                    ),
-                                  )
-                                  .toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                _selectedYear = value;
-                              });
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Builder(
-                      builder: (context) {
-                        final months = _getMonthsForYear(_selectedYear);
-                        final trendsRaw =
-                            _diseaseTrendsByYear[_selectedYear] ?? {};
-                        final trends = <String, List<int>>{};
-                        for (final entry in trendsRaw.entries) {
-                          trends[entry.key] = _padDataToMonths(
-                            entry.value,
-                            months.length,
-                          );
-                        }
-                        final hasData =
-                            trends.isNotEmpty &&
-                            trends.values.any((list) => list.any((v) => v > 0));
-                        if (!hasData) {
-                          return Container(
-                            height: 200,
-                            alignment: Alignment.center,
-                            child: const Text(
-                              'No data available for the selected year.',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          );
-                        }
-                        return Column(
-                          children: [
-                            SizedBox(
-                              height: 260,
-                              child: LineChart(
-                                LineChartData(
-                                  gridData: FlGridData(show: true),
-                                  titlesData: FlTitlesData(
-                                    leftTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        reservedSize: 40,
-                                        getTitlesWidget: (value, meta) {
-                                          if (value % 50 == 0) {
-                                            return Text(
-                                              value.toInt().toString(),
-                                              style: const TextStyle(
-                                                color: Colors.black54,
-                                                fontWeight: FontWeight.w500,
-                                                fontSize: 12,
-                                              ),
-                                            );
-                                          }
-                                          return const SizedBox.shrink();
-                                        },
-                                      ),
-                                    ),
-                                    bottomTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        interval: 1,
-                                        getTitlesWidget: (value, meta) {
-                                          if (value % 1 == 0 &&
-                                              value >= 0 &&
-                                              value < months.length) {
-                                            return Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 8.0,
-                                              ),
-                                              child: Text(
-                                                months[value.toInt()],
-                                                style: const TextStyle(
-                                                  color: Colors.black,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 13,
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                          return const SizedBox.shrink();
-                                        },
-                                        reservedSize: 36,
-                                      ),
-                                    ),
-                                    topTitles: AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                    rightTitles: AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                  ),
-                                  borderData: FlBorderData(show: false),
-                                  lineBarsData:
-                                      trends.entries.map((entry) {
-                                        final color = _getDiseaseTrendColor(
-                                          entry.key,
-                                        );
-                                        return LineChartBarData(
-                                          spots:
-                                              entry.value
-                                                  .asMap()
-                                                  .entries
-                                                  .map(
-                                                    (e) => FlSpot(
-                                                      e.key.toDouble(),
-                                                      e.value.toDouble(),
-                                                    ),
-                                                  )
-                                                  .toList(),
-                                          isCurved: true,
-                                          color: color,
-                                          barWidth: 3,
-                                          dotData: FlDotData(show: false),
-                                          belowBarData: BarAreaData(
-                                            show: false,
-                                          ),
-                                        );
-                                      }).toList(),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Wrap(
-                              spacing: 16,
-                              runSpacing: 8,
-                              children:
-                                  trends.keys
-                                      .map(
-                                        (disease) => Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Container(
-                                              width: 16,
-                                              height: 4,
-                                              color: _getDiseaseTrendColor(
-                                                disease,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              disease,
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                color: _getDiseaseTrendColor(
-                                                  disease,
-                                                ),
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      )
-                                      .toList(),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -768,7 +459,7 @@ class _ReportsListTableState extends State<ReportsListTable> {
   }
 }
 
-class DiseaseDistributionChart extends StatelessWidget {
+class DiseaseDistributionChart extends StatefulWidget {
   final List<Map<String, dynamic>> diseaseStats;
   final double? height;
   const DiseaseDistributionChart({
@@ -776,6 +467,61 @@ class DiseaseDistributionChart extends StatelessWidget {
     required this.diseaseStats,
     this.height,
   }) : super(key: key);
+
+  @override
+  State<DiseaseDistributionChart> createState() =>
+      _DiseaseDistributionChartState();
+}
+
+class _DiseaseDistributionChartState extends State<DiseaseDistributionChart> {
+  String _selectedTimeRange = 'Last 7 Days';
+
+  // Dummy data for different time ranges
+  final Map<String, List<Map<String, dynamic>>> _timeRangeData = {
+    '1 Day': [
+      {'name': 'Anthracnose', 'count': 12, 'percentage': 0.30},
+      {'name': 'Bacterial Blackspot', 'count': 8, 'percentage': 0.20},
+      {'name': 'Powdery Mildew', 'count': 10, 'percentage': 0.25},
+      {'name': 'Dieback', 'count': 4, 'percentage': 0.10},
+      {'name': 'Tip Burn (Unknown)', 'count': 2, 'percentage': 0.05},
+      {'name': 'Healthy', 'count': 4, 'percentage': 0.10},
+    ],
+    'Last 7 Days': [
+      {'name': 'Anthracnose', 'count': 156, 'percentage': 0.25},
+      {'name': 'Bacterial Blackspot', 'count': 98, 'percentage': 0.16},
+      {'name': 'Powdery Mildew', 'count': 145, 'percentage': 0.23},
+      {'name': 'Dieback', 'count': 70, 'percentage': 0.11},
+      {'name': 'Tip Burn (Unknown)', 'count': 42, 'percentage': 0.07},
+      {'name': 'Healthy', 'count': 112, 'percentage': 0.18},
+    ],
+    'Last 30 Days': [
+      {'name': 'Anthracnose', 'count': 450, 'percentage': 0.28},
+      {'name': 'Bacterial Blackspot', 'count': 320, 'percentage': 0.20},
+      {'name': 'Powdery Mildew', 'count': 380, 'percentage': 0.24},
+      {'name': 'Dieback', 'count': 180, 'percentage': 0.11},
+      {'name': 'Tip Burn (Unknown)', 'count': 120, 'percentage': 0.07},
+      {'name': 'Healthy', 'count': 150, 'percentage': 0.10},
+    ],
+    'Last 90 Days': [
+      {'name': 'Anthracnose', 'count': 1200, 'percentage': 0.30},
+      {'name': 'Bacterial Blackspot', 'count': 850, 'percentage': 0.21},
+      {'name': 'Powdery Mildew', 'count': 950, 'percentage': 0.24},
+      {'name': 'Dieback', 'count': 450, 'percentage': 0.11},
+      {'name': 'Tip Burn (Unknown)', 'count': 250, 'percentage': 0.06},
+      {'name': 'Healthy', 'count': 300, 'percentage': 0.08},
+    ],
+    'Last Year': [
+      {'name': 'Anthracnose', 'count': 4800, 'percentage': 0.32},
+      {'name': 'Bacterial Blackspot', 'count': 3200, 'percentage': 0.21},
+      {'name': 'Powdery Mildew', 'count': 3600, 'percentage': 0.24},
+      {'name': 'Dieback', 'count': 1800, 'percentage': 0.12},
+      {'name': 'Tip Burn (Unknown)', 'count': 900, 'percentage': 0.06},
+      {'name': 'Healthy', 'count': 700, 'percentage': 0.05},
+    ],
+  };
+
+  List<Map<String, dynamic>> get _currentData =>
+      _timeRangeData[_selectedTimeRange] ?? _timeRangeData['Last 7 Days']!;
 
   Color _getDiseaseColor(String disease) {
     switch (disease.toLowerCase()) {
@@ -804,19 +550,49 @@ class DiseaseDistributionChart extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Disease Distribution',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Disease Distribution',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                DropdownButton<String>(
+                  value: _selectedTimeRange,
+                  items:
+                      [
+                            '1 Day',
+                            'Last 7 Days',
+                            'Last 30 Days',
+                            'Last 90 Days',
+                            'Last Year',
+                          ]
+                          .map(
+                            (range) => DropdownMenuItem(
+                              value: range,
+                              child: Text(range),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedTimeRange = value;
+                      });
+                    }
+                  },
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Container(
-              height: height ?? 320,
+              height: widget.height ?? 320,
               width: double.infinity,
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
                   maxY:
-                      diseaseStats
+                      _currentData
                           .map((d) => d['count'].toDouble())
                           .reduce((a, b) => a > b ? a : b) *
                       1.2,
@@ -825,7 +601,7 @@ class DiseaseDistributionChart extends StatelessWidget {
                     touchTooltipData: BarTouchTooltipData(
                       tooltipBgColor: Colors.blueGrey,
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                        final disease = diseaseStats[groupIndex];
+                        final disease = _currentData[groupIndex];
                         return BarTooltipItem(
                           '${disease['name']}\n${disease['count']} cases\n${(disease['percentage'] * 100).toStringAsFixed(1)}%',
                           const TextStyle(color: Colors.white),
@@ -839,10 +615,10 @@ class DiseaseDistributionChart extends StatelessWidget {
                       sideTitles: SideTitles(
                         showTitles: true,
                         getTitlesWidget: (value, meta) {
-                          if (value < 0 || value >= diseaseStats.length) {
+                          if (value < 0 || value >= _currentData.length) {
                             return const SizedBox.shrink();
                           }
-                          final disease = diseaseStats[value.toInt()];
+                          final disease = _currentData[value.toInt()];
                           return Padding(
                             padding: const EdgeInsets.only(top: 8.0),
                             child: Column(
@@ -902,7 +678,7 @@ class DiseaseDistributionChart extends StatelessWidget {
                   ),
                   borderData: FlBorderData(show: false),
                   barGroups:
-                      diseaseStats.asMap().entries.map((entry) {
+                      _currentData.asMap().entries.map((entry) {
                         final index = entry.key;
                         final disease = entry.value;
                         return BarChartGroupData(
@@ -911,7 +687,7 @@ class DiseaseDistributionChart extends StatelessWidget {
                             BarChartRodData(
                               toY: disease['count'].toDouble(),
                               color: _getDiseaseColor(disease['name']),
-                              width: 36, // Wider bar
+                              width: 36,
                               borderRadius: const BorderRadius.vertical(
                                 top: Radius.circular(8),
                               ),
