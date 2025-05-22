@@ -13,7 +13,8 @@ class DetectionPainter extends CustomPainter {
   // Disease color map
   static const Map<String, Color> diseaseColors = {
     'anthracnose': Colors.orange,
-    'backterial_blackspot': Colors.purple,
+    'backterial_blackspot':
+        Colors.purple, // Keep original label for model compatibility
     'dieback': Colors.red,
     'healthy': Color.fromARGB(255, 2, 119, 252),
     'powdery_mildew': Color.fromARGB(255, 9, 46, 2),
@@ -29,6 +30,22 @@ class DetectionPainter extends CustomPainter {
     this.displayedImageOffset,
     this.debugMode = true, // Enable debug mode by default for visibility
   });
+
+  String _formatLabel(String label) {
+    switch (label.toLowerCase()) {
+      case 'backterial_blackspot':
+        return 'Bacterial black spot';
+      case 'powdery_mildew':
+        return 'Powdery Mildew';
+      case 'tip_burn':
+        return 'Unknown';
+      default:
+        return label
+            .split('_')
+            .map((word) => word[0].toUpperCase() + word.substring(1))
+            .join(' ');
+    }
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -102,7 +119,8 @@ class DetectionPainter extends CustomPainter {
         // Draw label with confidence
         final textPainter = TextPainter(
           text: TextSpan(
-            text: '${result.label} (${(result.confidence * 100).toInt()}%)',
+            text:
+                '${_formatLabel(result.label)} (${(result.confidence * 100).toInt()}%)',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 12,

@@ -27,7 +27,7 @@ class DetectionResultCard extends StatelessWidget {
       case 'powdery_mildew':
         return 'Powdery Mildew';
       case 'tip_burn':
-        return 'Tip Burn';
+        return 'Unknown';
       default:
         return label
             .split('_')
@@ -357,7 +357,9 @@ class DetectionResultCard extends StatelessWidget {
                         const SizedBox(height: 4),
                         if (percentage != null)
                           Text(
-                            'Percentage: ${(percentage! * 100).toStringAsFixed(1)}%',
+                            result.label.toLowerCase() == 'tip_burn'
+                                ? 'Unknown: ${(percentage! * 100).toStringAsFixed(1)}%'
+                                : 'Percentage: ${(percentage! * 100).toStringAsFixed(1)}%',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey[700],

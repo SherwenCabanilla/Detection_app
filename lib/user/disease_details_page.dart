@@ -50,6 +50,8 @@ class DiseaseDetailsPage extends StatelessWidget {
             child: Text(
               name.toLowerCase() == 'healthy'
                   ? 'Plant Status'
+                  : name.toLowerCase().contains('tip burn')
+                  ? 'Disorder Identified'
                   : 'Disease Identified',
               style: const TextStyle(
                 color: Colors.white,
