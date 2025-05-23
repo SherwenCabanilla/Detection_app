@@ -13,49 +13,9 @@ class _UserManagementState extends State<UserManagement> {
   String _searchQuery = '';
   String _selectedFilter = 'All';
 
-  // Dummy data for testing
-  final List<Map<String, dynamic>> _users = [
-    {
-      'id': 'USER_001',
-      'name': 'John Doe',
-      'email': 'john@example.com',
-      'status': 'pending',
-      'role': 'user',
-      'registeredAt': '2024-03-15 10:30',
-      'lastActive': '2024-03-15 10:30',
-    },
-    {
-      'id': 'USER_002',
-      'name': 'Jane Smith',
-      'email': 'jane@example.com',
-      'status': 'active',
-      'role': 'user',
-      'registeredAt': '2024-03-14 15:45',
-      'lastActive': '2024-03-15 09:20',
-    },
-    {
-      'id': 'USER_003',
-      'name': 'Mike Johnson',
-      'email': 'mike@example.com',
-      'status': 'active',
-      'role': 'expert',
-      'registeredAt': '2024-03-13 09:15',
-      'lastActive': '2024-03-14 16:30',
-    },
-    {
-      'id': 'USER_004',
-      'name': 'Dr. Sarah Wilson',
-      'email': 'sarah@example.com',
-      'status': 'pending',
-      'role': 'user',
-      'registeredAt': '2024-03-15 09:30',
-      'lastActive': '2024-03-15 09:30',
-    },
-  ];
-
   List<Map<String, dynamic>> get _filteredUsers {
     final filtered =
-        _users.where((user) {
+        UserStore.users.where((user) {
           final matchesSearch =
               user['name'].toString().toLowerCase().contains(
                 _searchQuery.toLowerCase(),
@@ -440,7 +400,8 @@ class _UserManagementState extends State<UserManagement> {
                                                     TextButton(
                                                       onPressed: () {
                                                         setState(() {
-                                                          _users.remove(user);
+                                                          UserStore.users
+                                                              .remove(user);
                                                         });
                                                         Navigator.pop(context);
                                                         ScaffoldMessenger.of(

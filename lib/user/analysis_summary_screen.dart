@@ -6,6 +6,7 @@ import 'detection_screen.dart';
 import 'detection_carousel_screen.dart';
 import '../shared/review_manager.dart';
 import '../shared/user_profile.dart';
+import 'detection_result_card.dart';
 
 class AnalysisSummaryScreen extends StatefulWidget {
   final Map<int, List<DetectionResult>> allResults;
@@ -94,12 +95,19 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
       }
 
       // Convert disease counts to the format expected by ReviewManager
+      final Map<String, int> diseaseLabelCounts = {};
+      widget.allResults.values.forEach((results) {
+        for (var result in results) {
+          diseaseLabelCounts[result.label] =
+              (diseaseLabelCounts[result.label] ?? 0) + 1;
+        }
+      });
       final diseaseCounts =
-          widget.allResults.values.map((results) {
+          diseaseLabelCounts.entries.map((entry) {
             return {
-              'name': _formatLabel(results[0].label),
-              'label': results[0].label,
-              'count': results.length,
+              'name': _formatLabel(entry.key),
+              'label': entry.key,
+              'count': entry.value,
             };
           }).toList();
 
@@ -173,6 +181,20 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     final color = DetectionPainter.diseaseColors[disease] ?? Colors.grey;
     final percentage = _getDiseasePercentage(disease, diseaseCounts);
     final isHealthy = disease.toLowerCase() == 'healthy';
+    final isUnknown = disease.toLowerCase() == 'tip_burn';
+
+    if (isUnknown) {
+      // Use DetectionResultCard for Unknown (tip_burn)
+      return DetectionResultCard(
+        result: DetectionResult(
+          label: 'tip_burn',
+          confidence: percentage,
+          boundingBox: Rect.zero,
+        ),
+        count: count,
+        percentage: percentage,
+      );
+    }
 
     return Card(
       elevation: 4,

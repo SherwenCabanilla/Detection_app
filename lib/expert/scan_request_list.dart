@@ -62,6 +62,10 @@ class _ScanRequestListState extends State<ScanRequestList>
 
   String _formatDiseaseName(String disease) {
     // Convert snake_case to Title Case and replace underscores with spaces
+    final normalized = disease.replaceAll('_', ' ').toLowerCase();
+    if (normalized == 'tip burn') {
+      return 'Unknown';
+    }
     return disease
         .split('_')
         .map((word) => word[0].toUpperCase() + word.substring(1))

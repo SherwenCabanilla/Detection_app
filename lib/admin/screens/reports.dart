@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'reports_list.dart';
+import '../shared/total_users_card.dart';
+import '../shared/pending_approvals_card.dart';
 
 class Reports extends StatefulWidget {
   const Reports({Key? key}) : super(key: key);
@@ -102,30 +104,14 @@ class _ReportsState extends State<Reports> {
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 3,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 2.2,
+              crossAxisCount: 4,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 1.2,
               children: [
-                _buildStatCard(
-                  'Total Users',
-                  _stats['totalUsers'].toString(),
-                  Icons.people,
-                  Colors.blue,
-                ),
+                const TotalUsersCard(),
                 TotalReportsCard(reportsTrend: _reportsTrend),
-                _buildStatCard(
-                  'Active Users',
-                  _stats['activeUsers'].toString(),
-                  Icons.person,
-                  Colors.orange,
-                ),
-                _buildStatCard(
-                  'Pending Approvals',
-                  _stats['pendingApprovals'].toString(),
-                  Icons.pending_actions,
-                  Colors.red,
-                ),
+                const PendingApprovalsCard(),
                 _buildStatCard(
                   'Avg. Response Time',
                   _stats['averageResponseTime'],
@@ -166,7 +152,7 @@ class _ReportsState extends State<Reports> {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(10),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

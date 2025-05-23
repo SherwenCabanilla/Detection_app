@@ -664,15 +664,9 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
           'Remove and destroy infected plant material.',
         ],
       },
-      'tip_burn': {
-        'symptoms': [
-          'Browning and necrosis of leaf margins and tips, often due to environmental stress or nutrient imbalance.',
-        ],
-        'treatments': [
-          'Maintain consistent soil moisture and avoid drought stress.',
-          'Ensure proper calcium and magnesium levels in soil.',
-          'Protect plants from excessive heat and wind exposure.',
-        ],
+      'Unknown': {
+        'symptoms': ['N/A.'],
+        'treatments': ['N/A.'],
       },
     };
 
@@ -1463,7 +1457,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
         return 'Powdery Mildew';
       case 'tip_burn':
       case 'tip burn':
-        return 'Tip Burn';
+        return 'Unknown';
       default:
         return label
             .replaceAll('_', ' ')

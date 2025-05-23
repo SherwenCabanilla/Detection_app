@@ -299,6 +299,25 @@ final List<Map<String, dynamic>> userRequests = [
   },
 ];
 
+String _formatExpertLabel(String label) {
+  switch (label.toLowerCase()) {
+    case 'backterial_blackspot':
+    case 'bacterial blackspot':
+      return 'Bacterial black spot';
+    case 'powdery_mildew':
+    case 'powdery mildew':
+      return 'Powdery Mildew';
+    case 'tip_burn':
+    case 'tip burn':
+      return 'Unknown';
+    default:
+      return label
+          .split('_')
+          .map((word) => word[0].toUpperCase() + word.substring(1))
+          .join(' ');
+  }
+}
+
 class UserRequestList extends StatefulWidget {
   final List<Map<String, dynamic>> requests;
   const UserRequestList({Key? key, required this.requests}) : super(key: key);
@@ -364,7 +383,7 @@ class _UserRequestListState extends State<UserRequestList> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '$mainDisease Detection',
+                          '${_formatExpertLabel(mainDisease)} Detection',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -1143,25 +1162,6 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
         return Colors.brown;
       default:
         return Colors.grey;
-    }
-  }
-
-  String _formatExpertLabel(String label) {
-    switch (label.toLowerCase()) {
-      case 'backterial_blackspot':
-      case 'bacterial blackspot':
-        return 'Bacterial black spot';
-      case 'powdery_mildew':
-      case 'powdery mildew':
-        return 'Powdery Mildew';
-      case 'tip_burn':
-      case 'tip burn':
-        return 'Tip Burn';
-      default:
-        return label
-            .split('_')
-            .map((word) => word[0].toUpperCase() + word.substring(1))
-            .join(' ');
     }
   }
 

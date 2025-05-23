@@ -162,7 +162,33 @@ class DetectionResultCard extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 20),
-                        if (info != null) ...[
+                        if (label == 'tip_burn') ...[
+                          const Text(
+                            'Symptoms',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'N/A',
+                            style: TextStyle(fontSize: 15, color: Colors.grey),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Treatment & Recommendations',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'N/A',
+                            style: TextStyle(fontSize: 15, color: Colors.grey),
+                          ),
+                        ] else if (info != null) ...[
                           const Text(
                             'Symptoms',
                             style: TextStyle(
@@ -390,7 +416,11 @@ class DetectionResultCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      isHealthy ? 'View Status' : 'See Recommendation',
+                      isHealthy
+                          ? 'View Status'
+                          : result.label.toLowerCase() == 'tip_burn'
+                          ? 'N/A'
+                          : 'See Recommendation',
                       style: TextStyle(
                         color: diseaseColor,
                         fontWeight: FontWeight.bold,

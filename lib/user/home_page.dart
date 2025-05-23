@@ -327,11 +327,11 @@ class _HomePageState extends State<HomePage> {
                             ),
                             const SizedBox(height: 16),
                             // Tip Burn recommendation card (not detected, info only)
-                            _buildDiseaseCard(
-                              'Tip Burn',
-                              'assets/diseases/tip_burn.jpg',
-                            ),
-                            const SizedBox(height: 16),
+                            // _buildDiseaseCard(
+                            //   'Tip Burn',
+                            //   'assets/diseases/tip_burn.jpg',
+                            // ),
+                            // const SizedBox(height: 16),
                           ],
                         ),
                       )

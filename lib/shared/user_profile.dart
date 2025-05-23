@@ -3,7 +3,7 @@ class UserProfile {
   factory UserProfile() => _instance;
   UserProfile._internal();
 
-  String _userName = 'Diwata Pares';
+  String _userName = 'Test user';
 
   String get userName => _userName;
 
