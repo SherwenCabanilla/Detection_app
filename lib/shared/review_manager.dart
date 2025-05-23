@@ -1,12 +1,24 @@
 import 'package:uuid/uuid.dart';
+import 'package:hive/hive.dart';
 
 class ReviewManager {
   static final ReviewManager _instance = ReviewManager._internal();
   factory ReviewManager() => _instance;
-  ReviewManager._internal();
+  ReviewManager._internal() {
+    _loadFromHive();
+  }
 
   final List<Map<String, dynamic>> _pendingReviews = [];
   final _uuid = const Uuid();
+  final String _boxName = 'reviews';
+
+  Future<void> _loadFromHive() async {
+    final box = Hive.box(_boxName);
+    _pendingReviews.clear();
+    for (var review in box.values) {
+      _pendingReviews.add(Map<String, dynamic>.from(review));
+    }
+  }
 
   Future<void> submitForReview({
     required String userId,
@@ -36,6 +48,8 @@ class ReviewManager {
     };
 
     _pendingReviews.insert(0, review);
+    final box = Hive.box(_boxName);
+    await box.put(review['id'], review);
   }
 
   Future<void> updateReview({
@@ -51,11 +65,15 @@ class ReviewManager {
       if (expertReview != null) {
         _pendingReviews[index]['expertReview'] = expertReview;
       }
+      final box = Hive.box(_boxName);
+      await box.put(_pendingReviews[index]['id'], _pendingReviews[index]);
     }
   }
 
-  void clearReviews() {
+  Future<void> clearReviews() async {
     _pendingReviews.clear();
+    final box = Hive.box(_boxName);
+    await box.clear();
   }
 
   List<Map<String, dynamic>> get pendingReviews => _pendingReviews;

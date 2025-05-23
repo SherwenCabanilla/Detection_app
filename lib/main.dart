@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'user/login_page.dart';
 import 'user/home_page.dart';
 import 'user/register_page.dart';
@@ -6,7 +7,10 @@ import 'expert/expert_dashboard.dart';
 import 'test_account.dart';
 import 'admin/screens/admin_login.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
+  await Hive.openBox('reviews'); // Open a box for review/request data
   runApp(const CapstoneApp());
 }
 
