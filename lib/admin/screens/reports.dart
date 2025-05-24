@@ -20,7 +20,7 @@ class _ReportsState extends State<Reports> {
     'totalExperts': 45,
     'activeUsers': 890,
     'pendingApprovals': 12,
-    'averageResponseTime': '2.5 hours',
+    'averageResponseTime': '2.39 hours',
   };
 
   // Dummy data for reports trend
@@ -117,6 +117,7 @@ class _ReportsState extends State<Reports> {
                   _stats['averageResponseTime'],
                   Icons.timer,
                   Colors.teal,
+                  onTap: () => _showAvgResponseTimeModal(context),
                 ),
               ],
             ),
@@ -181,6 +182,13 @@ class _ReportsState extends State<Reports> {
 
   void _showReportsTrendDialog(BuildContext context) {
     showDialog(context: context, builder: (context) => ReportsTrendDialog());
+  }
+
+  void _showAvgResponseTimeModal(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const AvgResponseTimeModal(),
+    );
   }
 }
 
@@ -1469,5 +1477,507 @@ class _ReportsTrendDialogState extends State<ReportsTrendDialog> {
       final parts = date.split('-');
       return parts.length > 2 ? '${parts[1]}/${parts[2]}' : date;
     }
+  }
+}
+
+class AvgResponseTimeModal extends StatefulWidget {
+  const AvgResponseTimeModal({Key? key}) : super(key: key);
+
+  @override
+  State<AvgResponseTimeModal> createState() => _AvgResponseTimeModalState();
+}
+
+class _AvgResponseTimeModalState extends State<AvgResponseTimeModal> {
+  String _selectedRange = 'Last 7 Days';
+
+  // Hardcoded mock data for each range
+  final Map<String, List<String>> _labelsData = {
+    '1 Day': ['May 1'],
+    'Last 7 Days': [
+      'Apr 25',
+      'Apr 26',
+      'Apr 27',
+      'Apr 28',
+      'Apr 29',
+      'Apr 30',
+      'May 1',
+    ],
+    'Last 30 Days': [for (int i = 2; i <= 30; i++) 'Apr $i'] + ['May 1'],
+    'Last 60 Days':
+        [for (int i = 3; i <= 31; i++) 'Mar $i'] +
+        [for (int i = 1; i <= 29; i++) 'Apr $i'] +
+        ['Apr 30'],
+    'Last 90 Days':
+        [for (int i = 1; i <= 31; i++) 'Feb $i'] +
+        [for (int i = 1; i <= 31; i++) 'Mar $i'] +
+        [for (int i = 1; i <= 28; i++) 'Apr $i'],
+    'Last Year': [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ],
+  };
+  final Map<String, List<double>> _responseTimesData = {
+    '1 Day': [2.1],
+    'Last 7 Days': [2.5, 2.2, 2.8, 2.0, 2.7, 2.4, 2.1],
+    'Last 30 Days': List.generate(30, (i) => 1.5 + (i % 7) * 0.2),
+    'Last 60 Days': List.generate(60, (i) => 1.2 + (i % 10) * 0.15),
+    'Last 90 Days': List.generate(90, (i) => 1.0 + (i % 15) * 0.1),
+    'Last Year': [2.5, 2.3, 2.1, 2.0, 1.9, 1.8, 1.7, 1.8, 1.9, 2.0, 2.2, 2.4],
+  };
+  final Map<String, List<int>> _distributionData = {
+    // <1h, 1-4h, 4-24h, >24h
+    '1 Day': [2, 5, 1, 0],
+    'Last 7 Days': [10, 30, 8, 2],
+    'Last 30 Days': [40, 120, 30, 10],
+    'Last 60 Days': [80, 220, 60, 20],
+    'Last 90 Days': [120, 320, 90, 30],
+    'Last Year': [500, 1800, 400, 100],
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    List<String> labels = _labelsData[_selectedRange]!;
+    List<double> responseTimes = _responseTimesData[_selectedRange]!;
+    List<int> distribution = _distributionData[_selectedRange]!;
+
+    // Aggregate by week for long ranges
+    List<String> displayLabels = labels;
+    List<double> displayResponseTimes = responseTimes;
+    if (_selectedRange == 'Last 30 Days' ||
+        _selectedRange == 'Last 60 Days' ||
+        _selectedRange == 'Last 90 Days') {
+      // Aggregate every 7 days
+      List<double> weeklyAverages = [];
+      List<String> weekLabels = [];
+      for (int i = 0; i < responseTimes.length; i += 7) {
+        int end = (i + 7 < responseTimes.length) ? i + 7 : responseTimes.length;
+        double avg =
+            responseTimes.sublist(i, end).reduce((a, b) => a + b) / (end - i);
+        weeklyAverages.add(double.parse(avg.toStringAsFixed(2)));
+        weekLabels.add('Wk ${(i ~/ 7) + 1}');
+      }
+      displayLabels = weekLabels;
+      displayResponseTimes = weeklyAverages;
+    }
+
+    // Find best/worst days
+    double minVal = displayResponseTimes.reduce((a, b) => a < b ? a : b);
+    double maxVal = displayResponseTimes.reduce((a, b) => a > b ? a : b);
+    int minIdx = displayResponseTimes.indexOf(minVal);
+    int maxIdx = displayResponseTimes.indexOf(maxVal);
+    String bestDay = displayLabels[minIdx];
+    String worstDay = displayLabels[maxIdx];
+
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      child: Container(
+        width: 700,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Average Response Time',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Detailed breakdown of response times',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.blueGrey,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Average response time within $_selectedRange: '
+                      '${displayResponseTimes.isNotEmpty ? (displayResponseTimes.reduce((a, b) => a + b) / displayResponseTimes.length).toStringAsFixed(2) : '-'} hours',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.teal,
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    DropdownButton<String>(
+                      value: _selectedRange,
+                      items:
+                          [
+                                '1 Day',
+                                'Last 7 Days',
+                                'Last 30 Days',
+                                'Last 60 Days',
+                                'Last 90 Days',
+                                'Last Year',
+                              ]
+                              .map(
+                                (range) => DropdownMenuItem(
+                                  value: range,
+                                  child: Text(range),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _selectedRange = value;
+                          });
+                        }
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 28),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            // Trend Chart
+            Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 35),
+                child: SizedBox(
+                  height: 220,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 12.0),
+                    child: LineChart(
+                      LineChartData(
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: true,
+                          horizontalInterval: 0.5,
+                          verticalInterval: 1,
+                          getDrawingHorizontalLine:
+                              (value) => FlLine(
+                                color: Colors.grey[200],
+                                strokeWidth: 1,
+                              ),
+                          getDrawingVerticalLine:
+                              (value) => FlLine(
+                                color: Colors.grey[200],
+                                strokeWidth: 1,
+                              ),
+                        ),
+                        titlesData: FlTitlesData(
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 56,
+                              getTitlesWidget: (value, meta) {
+                                if (value % 1 == 0) {
+                                  return Text(
+                                    value.toStringAsFixed(1),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.blueGrey,
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                              interval: 0.5,
+                            ),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 40,
+                              getTitlesWidget: (value, meta) {
+                                final idx = value.toInt();
+                                if (idx >= 0 && idx < displayLabels.length) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 8.0),
+                                    child: Text(
+                                      displayLabels[idx],
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blueGrey,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                              interval: 1,
+                            ),
+                          ),
+                          rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                        ),
+                        borderData: FlBorderData(
+                          show: true,
+                          border: Border.all(
+                            color: Colors.grey[300]!,
+                            width: 2,
+                          ),
+                        ),
+                        minX: 0,
+                        maxX: (displayLabels.length - 1).toDouble(),
+                        minY: 0,
+                        maxY:
+                            (displayResponseTimes.reduce(
+                                      (a, b) => a > b ? a : b,
+                                    ) *
+                                    1.2)
+                                .toDouble(),
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: [
+                              for (int i = 0; i < displayLabels.length; i++)
+                                FlSpot(i.toDouble(), displayResponseTimes[i]),
+                            ],
+                            isCurved: true,
+                            color: Colors.teal,
+                            barWidth: 6,
+                            belowBarData: BarAreaData(
+                              show: true,
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.teal.withOpacity(0.3),
+                                  Colors.teal.withOpacity(0.05),
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                            ),
+                            dotData: FlDotData(
+                              show: true,
+                              getDotPainter:
+                                  (spot, percent, bar, index) =>
+                                      FlDotCirclePainter(
+                                        radius: 7,
+                                        color: Colors.white,
+                                        strokeWidth: 4,
+                                        strokeColor: Colors.teal,
+                                      ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Distribution Histogram
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Response Time Distribution',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 120,
+                      child: BarChart(
+                        BarChartData(
+                          alignment: BarChartAlignment.spaceAround,
+                          maxY:
+                              (distribution.reduce((a, b) => a > b ? a : b) *
+                                      1.2)
+                                  .toDouble(),
+                          barGroups: [
+                            for (int i = 0; i < 4; i++)
+                              BarChartGroupData(
+                                x: i,
+                                barRods: [
+                                  BarChartRodData(
+                                    toY: distribution[i].toDouble(),
+                                    color: Colors.teal,
+                                    width: 32,
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(8),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
+                          titlesData: FlTitlesData(
+                            leftTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 32,
+                                getTitlesWidget: (value, meta) {
+                                  if (value % 10 == 0) {
+                                    return Text(
+                                      value.toInt().toString(),
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.blueGrey,
+                                      ),
+                                    );
+                                  }
+                                  return const SizedBox.shrink();
+                                },
+                              ),
+                            ),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                getTitlesWidget: (value, meta) {
+                                  switch (value.toInt()) {
+                                    case 0:
+                                      return const Text(
+                                        '<1h',
+                                        style: TextStyle(fontSize: 14),
+                                      );
+                                    case 1:
+                                      return const Text(
+                                        '1-4h',
+                                        style: TextStyle(fontSize: 14),
+                                      );
+                                    case 2:
+                                      return const Text(
+                                        '4-24h',
+                                        style: TextStyle(fontSize: 14),
+                                      );
+                                    case 3:
+                                      return const Text(
+                                        '>24h',
+                                        style: TextStyle(fontSize: 14),
+                                      );
+                                    default:
+                                      return const SizedBox.shrink();
+                                  }
+                                },
+                              ),
+                            ),
+                            rightTitles: AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            topTitles: AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                          ),
+                          borderData: FlBorderData(show: false),
+                          gridData: FlGridData(
+                            show: true,
+                            drawVerticalLine: false,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Best/Worst Days
+            Row(
+              children: [
+                Expanded(
+                  child: Card(
+                    color: Colors.green[50],
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Fastest Day',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '$bestDay',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              color: Colors.green,
+                            ),
+                          ),
+                          Text(
+                            '${minVal.toStringAsFixed(2)} hours',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Card(
+                    color: Colors.red[50],
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Slowest Day',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '$worstDay',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              color: Colors.red,
+                            ),
+                          ),
+                          Text(
+                            '${maxVal.toStringAsFixed(2)} hours',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

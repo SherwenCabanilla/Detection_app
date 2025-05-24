@@ -54,16 +54,26 @@ class _AdminDashboardState extends State<AdminDashboard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  'Welcome, ${widget.adminUser.username}',
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Glad to see you back!',
+                  style: TextStyle(fontSize: 18, color: Colors.blueGrey),
+                ),
+                const SizedBox(height: 10),
                 const Text(
                   'Dashboard',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  'Welcome, ${widget.adminUser.username}',
-                  style: const TextStyle(fontSize: 16),
                 ),
               ],
             ),
@@ -124,6 +134,79 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ],
                     ),
                     const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 10,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              for (var user in UserStore.users.where(
+                                (u) => u['status'] == 'pending',
+                              )) {
+                                user['status'] = 'active';
+                              }
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'All pending users have been accepted',
+                                ),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            'Accept All',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 10,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              UserStore.users.removeWhere(
+                                (u) => u['status'] == 'pending',
+                              );
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'All pending users have been deleted',
+                                ),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            'Delete All',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
@@ -216,188 +299,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                               },
                                             ),
                                             const SizedBox(width: 8),
-                                            IconButton(
-                                              icon: const Icon(Icons.edit),
-                                              color: Colors.blue,
-                                              onPressed: () async {
-                                                final nameController =
-                                                    TextEditingController(
-                                                      text: user['name'],
-                                                    );
-                                                final emailController =
-                                                    TextEditingController(
-                                                      text: user['email'],
-                                                    );
-                                                String status = user['status'];
-                                                String role = user['role'];
-                                                final result = await showDialog<
-                                                  Map<String, dynamic>
-                                                >(
-                                                  context: context,
-                                                  builder: (context) {
-                                                    return AlertDialog(
-                                                      title: const Text(
-                                                        'Edit User',
-                                                      ),
-                                                      content: SingleChildScrollView(
-                                                        child: Column(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          children: [
-                                                            TextField(
-                                                              controller:
-                                                                  nameController,
-                                                              decoration:
-                                                                  const InputDecoration(
-                                                                    labelText:
-                                                                        'Name',
-                                                                  ),
-                                                            ),
-                                                            TextField(
-                                                              controller:
-                                                                  emailController,
-                                                              decoration:
-                                                                  const InputDecoration(
-                                                                    labelText:
-                                                                        'Email',
-                                                                  ),
-                                                            ),
-                                                            DropdownButtonFormField<
-                                                              String
-                                                            >(
-                                                              value: status,
-                                                              items:
-                                                                  [
-                                                                        'pending',
-                                                                        'active',
-                                                                      ]
-                                                                      .map(
-                                                                        (
-                                                                          s,
-                                                                        ) => DropdownMenuItem(
-                                                                          value:
-                                                                              s,
-                                                                          child: Text(
-                                                                            s[0].toUpperCase() +
-                                                                                s.substring(1),
-                                                                          ),
-                                                                        ),
-                                                                      )
-                                                                      .toList(),
-                                                              onChanged: (
-                                                                value,
-                                                              ) {
-                                                                if (value !=
-                                                                    null)
-                                                                  status =
-                                                                      value;
-                                                              },
-                                                              decoration:
-                                                                  const InputDecoration(
-                                                                    labelText:
-                                                                        'Status',
-                                                                  ),
-                                                            ),
-                                                            DropdownButtonFormField<
-                                                              String
-                                                            >(
-                                                              value: role,
-                                                              items:
-                                                                  [
-                                                                        'user',
-                                                                        'expert',
-                                                                      ]
-                                                                      .map(
-                                                                        (
-                                                                          r,
-                                                                        ) => DropdownMenuItem(
-                                                                          value:
-                                                                              r,
-                                                                          child: Text(
-                                                                            r[0].toUpperCase() +
-                                                                                r.substring(1),
-                                                                          ),
-                                                                        ),
-                                                                      )
-                                                                      .toList(),
-                                                              onChanged: (
-                                                                value,
-                                                              ) {
-                                                                if (value !=
-                                                                    null)
-                                                                  role = value;
-                                                              },
-                                                              decoration:
-                                                                  const InputDecoration(
-                                                                    labelText:
-                                                                        'Role',
-                                                                  ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                      actions: [
-                                                        TextButton(
-                                                          onPressed:
-                                                              () =>
-                                                                  Navigator.pop(
-                                                                    context,
-                                                                    null,
-                                                                  ),
-                                                          child: const Text(
-                                                            'Cancel',
-                                                          ),
-                                                        ),
-                                                        ElevatedButton(
-                                                          onPressed: () {
-                                                            Navigator.pop(context, {
-                                                              'name':
-                                                                  nameController
-                                                                      .text,
-                                                              'email':
-                                                                  emailController
-                                                                      .text,
-                                                              'status': status,
-                                                              'role': role,
-                                                            });
-                                                          },
-                                                          child: const Text(
-                                                            'Save',
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    );
-                                                  },
-                                                );
-                                                if (result != null) {
-                                                  setState(() {
-                                                    user['name'] =
-                                                        result['name'];
-                                                    user['email'] =
-                                                        result['email'];
-                                                    user['status'] =
-                                                        result['status'];
-                                                    user['role'] =
-                                                        result['role'];
-                                                  });
-                                                  ScaffoldMessenger.of(
-                                                    context,
-                                                  ).showSnackBar(
-                                                    SnackBar(
-                                                      content: Text(
-                                                        '${user['name']} has been updated',
-                                                      ),
-                                                      backgroundColor:
-                                                          Colors.blue,
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.red,
+                                                foregroundColor: Colors.white,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                      vertical: 0,
                                                     ),
-                                                  );
-                                                }
-                                              },
-                                            ),
-                                            const SizedBox(width: 8),
-                                            IconButton(
-                                              icon: const Icon(Icons.delete),
-                                              color: Colors.red,
+                                                minimumSize: const Size(92, 36),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                              ),
+                                              child: const Text('Delete'),
                                               onPressed: () {
                                                 showDialog(
                                                   context: context,
@@ -407,7 +324,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                                           'Delete User',
                                                         ),
                                                         content: Text(
-                                                          'Are you sure you want to delete ${user['name']}?',
+                                                          'Are you sure you want to delete \'${user['name']}\'?',
                                                         ),
                                                         actions: [
                                                           TextButton(
@@ -446,6 +363,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                                             },
                                                             child: const Text(
                                                               'Delete',
+                                                              style: TextStyle(
+                                                                color:
+                                                                    Colors.red,
+                                                              ),
                                                             ),
                                                           ),
                                                         ],

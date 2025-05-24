@@ -83,7 +83,7 @@ class TFLiteDetector {
       final inputShape = [1, inputSize, inputSize, 3];
       final outputShape = [
         1,
-        10, // 4 bbox + 1 obj + 5 class scores
+        10, // 4 bbox + 1 obj + 6 class scores
         3549,
       ];
 
@@ -103,7 +103,6 @@ class TFLiteDetector {
         var maxClass = 0;
 
         for (var c = 5; c < 10; c++) {
-          // 5 classes
           final conf = outputData[c][i];
           if (conf > maxConf) {
             maxConf = conf;

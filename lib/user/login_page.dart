@@ -19,6 +19,7 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   final _formKey = GlobalKey<FormState>();
+  bool _obscurePassword = true;
 
   void _handleLogin() {
     if (_formKey.currentState!.validate()) {
@@ -181,7 +182,7 @@ class _LoginPageState extends State<LoginPage> {
                     // Password Field
                     TextFormField(
                       controller: _passwordController,
-                      obscureText: true,
+                      obscureText: _obscurePassword,
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
                         labelText: 'Password',
@@ -197,6 +198,19 @@ class _LoginPageState extends State<LoginPage> {
                         prefixIcon: const Icon(
                           Icons.lock,
                           color: Colors.white70,
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: Colors.white70,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
                         ),
                       ),
                       validator: (value) {
@@ -313,10 +327,9 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ],
                     ),
-                    // Secret admin login button
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
+                    // Secret admin login button (bottom right)
+                    Align(
+                      alignment: Alignment.bottomRight,
                       child: TextButton(
                         onPressed: () {
                           Navigator.push(

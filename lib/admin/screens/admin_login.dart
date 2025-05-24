@@ -15,6 +15,7 @@ class _AdminLoginState extends State<AdminLogin> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
+  bool _obscurePassword = true;
 
   void _login() {
     if (_formKey.currentState!.validate()) {
@@ -161,7 +162,7 @@ class _AdminLoginState extends State<AdminLogin> {
                         // Password Field
                         TextFormField(
                           controller: _passwordController,
-                          obscureText: true,
+                          obscureText: _obscurePassword,
                           decoration: InputDecoration(
                             labelText: 'Password',
                             labelStyle: const TextStyle(color: Colors.grey),
@@ -178,6 +179,19 @@ class _AdminLoginState extends State<AdminLogin> {
                             prefixIcon: const Icon(
                               Icons.lock,
                               color: Colors.grey,
+                            ),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: Colors.grey,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
                             ),
                           ),
                           validator: (value) {

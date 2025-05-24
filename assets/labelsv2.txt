@@ -1,0 +1,6 @@
+anthracnose
+b_spot
+dieback
+healthy
+powdery_mildew
+tip_burn
