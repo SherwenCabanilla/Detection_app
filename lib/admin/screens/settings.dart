@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 class Settings extends StatefulWidget {
-  const Settings({Key? key}) : super(key: key);
+  final VoidCallback? onViewReports;
+  const Settings({Key? key, this.onViewReports}) : super(key: key);
 
   @override
   State<Settings> createState() => _SettingsState();
@@ -178,9 +179,7 @@ class _SettingsState extends State<Settings> {
                           leading: const Icon(Icons.assessment),
                           title: const Text('View Reports'),
                           subtitle: const Text('Access system reports'),
-                          onTap: () {
-                            // Navigate to reports
-                          },
+                          onTap: widget.onViewReports,
                         ),
                       ),
                     );

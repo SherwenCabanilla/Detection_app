@@ -207,8 +207,8 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                             return Stack(
                               fit: StackFit.expand,
                               children: [
-                                Image.file(
-                                  File(imagePath),
+                                _buildImageWidget(
+                                  imagePath,
                                   fit: BoxFit.contain,
                                 ),
                                 if (_showBoundingBoxes && detections.isNotEmpty)
@@ -270,12 +270,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.file(
-                      File(imagePath),
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                    ),
+                    child: _buildImageWidget(imagePath, fit: BoxFit.cover),
                   ),
                   if (_showBoundingBoxes && detections.isNotEmpty)
                     FutureBuilder<Size>(
@@ -383,6 +378,34 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
         ),
       ],
     );
+  }
+
+  Widget _buildImageWidget(String path, {BoxFit fit = BoxFit.cover}) {
+    if (path.startsWith('/') || path.contains(':')) {
+      // File path
+      return Image.file(
+        File(path),
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Colors.grey[200],
+            child: const Icon(Icons.image_not_supported),
+          );
+        },
+      );
+    } else {
+      // Asset path
+      return Image.asset(
+        path,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Colors.grey[200],
+            child: const Icon(Icons.image_not_supported),
+          );
+        },
+      );
+    }
   }
 
   // Helper to merge disease summary entries with the same disease
@@ -1197,6 +1220,9 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
   Color _getDiseaseColor(String diseaseName) {
     final Map<String, Color> diseaseColors = {
       'anthracnose': Colors.orange,
+      'bacterial_blackspot': Colors.purple,
+      'bacterial blackspot': Colors.purple,
+      'bacterial black spot': Colors.purple,
       'backterial_blackspot': Colors.purple,
       'dieback': Colors.red,
       'healthy': Color.fromARGB(255, 2, 119, 252),

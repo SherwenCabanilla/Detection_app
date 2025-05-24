@@ -527,10 +527,6 @@ class _ExpertProfileState extends State<ExpertProfile> {
           ),
           const SizedBox(height: 24),
           // App Version
-          Text(
-            'Version 1.0.0',
-            style: TextStyle(color: Colors.grey[600], fontSize: 14),
-          ),
           const SizedBox(height: 24),
         ],
       ),

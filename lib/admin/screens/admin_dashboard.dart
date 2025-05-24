@@ -207,180 +207,197 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        columns: const [
-                          DataColumn(label: Text('Name')),
-                          DataColumn(label: Text('Email')),
-                          DataColumn(label: Text('Role')),
-                          DataColumn(label: Text('Registered')),
-                          DataColumn(label: Text('Last Active')),
-                          DataColumn(label: Text('Actions')),
-                        ],
-                        rows:
-                            UserStore.users
-                                .where((user) => user['status'] == 'pending')
-                                .map(
-                                  (user) => DataRow(
-                                    cells: [
-                                      DataCell(Text(user['name'])),
-                                      DataCell(Text(user['email'])),
-                                      DataCell(
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color:
-                                                user['role'] == 'expert'
-                                                    ? Colors.purple.withOpacity(
-                                                      0.1,
-                                                    )
-                                                    : Colors.blue.withOpacity(
-                                                      0.1,
-                                                    ),
-                                            borderRadius: BorderRadius.circular(
-                                              12,
+                    SizedBox(
+                      height: 250, // Keep the height as is
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          columns: const [
+                            DataColumn(label: Text('Name')),
+                            DataColumn(label: Text('Email')),
+                            DataColumn(label: Text('Phone Number')),
+                            DataColumn(label: Text('Address')),
+                            DataColumn(label: Text('Role')),
+                            DataColumn(label: Text('Registered')),
+                            DataColumn(label: Text('Actions')),
+                          ],
+                          rows:
+                              UserStore.users
+                                  .where((user) => user['status'] == 'pending')
+                                  .map(
+                                    (user) => DataRow(
+                                      cells: [
+                                        DataCell(Text(user['name'])),
+                                        DataCell(Text(user['email'])),
+                                        DataCell(Text(user['phone'] ?? '')),
+                                        DataCell(Text(user['address'] ?? '')),
+                                        DataCell(
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
                                             ),
-                                          ),
-                                          child: Text(
-                                            user['role']
-                                                .toString()
-                                                .toUpperCase(),
-                                            style: TextStyle(
+                                            decoration: BoxDecoration(
                                               color:
                                                   user['role'] == 'expert'
                                                       ? Colors.purple
-                                                      : Colors.blue,
-                                              fontWeight: FontWeight.bold,
+                                                          .withOpacity(0.1)
+                                                      : Colors.blue.withOpacity(
+                                                        0.1,
+                                                      ),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: Text(
+                                              user['role']
+                                                  .toString()
+                                                  .toUpperCase(),
+                                              style: TextStyle(
+                                                color:
+                                                    user['role'] == 'expert'
+                                                        ? Colors.purple
+                                                        : Colors.blue,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                      DataCell(Text(user['registeredAt'])),
-                                      DataCell(Text(user['lastActive'] ?? '-')),
-                                      DataCell(
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            ElevatedButton(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.green,
-                                                foregroundColor: Colors.white,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 0,
-                                                    ),
-                                                minimumSize: const Size(92, 36),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                              ),
-                                              child: const Text('Accept'),
-                                              onPressed: () {
-                                                setState(() {
-                                                  user['status'] = 'active';
-                                                });
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      '${user['name']} has been accepted',
-                                                    ),
-                                                    backgroundColor:
-                                                        Colors.green,
+                                        DataCell(Text(user['registeredAt'])),
+                                        DataCell(
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.green,
+                                                  foregroundColor: Colors.white,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 0,
+                                                      ),
+                                                  minimumSize: const Size(
+                                                    92,
+                                                    36,
                                                   ),
-                                                );
-                                              },
-                                            ),
-                                            const SizedBox(width: 8),
-                                            ElevatedButton(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.red,
-                                                foregroundColor: Colors.white,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 0,
-                                                    ),
-                                                minimumSize: const Size(92, 36),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8,
+                                                        ),
+                                                  ),
                                                 ),
+                                                child: const Text('Accept'),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    user['status'] = 'active';
+                                                  });
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(
+                                                        '${user['name']} has been accepted',
+                                                      ),
+                                                      backgroundColor:
+                                                          Colors.green,
+                                                    ),
+                                                  );
+                                                },
                                               ),
-                                              child: const Text('Delete'),
-                                              onPressed: () {
-                                                showDialog(
-                                                  context: context,
-                                                  builder:
-                                                      (context) => AlertDialog(
-                                                        title: const Text(
-                                                          'Delete User',
+                                              const SizedBox(width: 8),
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.red,
+                                                  foregroundColor: Colors.white,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 0,
+                                                      ),
+                                                  minimumSize: const Size(
+                                                    92,
+                                                    36,
+                                                  ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8,
                                                         ),
-                                                        content: Text(
-                                                          'Are you sure you want to delete \'${user['name']}\'?',
-                                                        ),
-                                                        actions: [
-                                                          TextButton(
-                                                            onPressed:
-                                                                () =>
-                                                                    Navigator.pop(
-                                                                      context,
-                                                                    ),
-                                                            child: const Text(
-                                                              'Cancel',
-                                                            ),
+                                                  ),
+                                                ),
+                                                child: const Text('Delete'),
+                                                onPressed: () {
+                                                  showDialog(
+                                                    context: context,
+                                                    builder:
+                                                        (
+                                                          context,
+                                                        ) => AlertDialog(
+                                                          title: const Text(
+                                                            'Delete User',
                                                           ),
-                                                          TextButton(
-                                                            onPressed: () {
-                                                              setState(() {
-                                                                UserStore.users
-                                                                    .remove(
-                                                                      user,
-                                                                    );
-                                                              });
-                                                              Navigator.pop(
-                                                                context,
-                                                              );
-                                                              ScaffoldMessenger.of(
-                                                                context,
-                                                              ).showSnackBar(
-                                                                SnackBar(
-                                                                  content: Text(
-                                                                    '${user['name']} has been deleted',
+                                                          content: Text(
+                                                            'Are you sure you want to delete \'${user['name']}\'?',
+                                                          ),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed:
+                                                                  () =>
+                                                                      Navigator.pop(
+                                                                        context,
+                                                                      ),
+                                                              child: const Text(
+                                                                'Cancel',
+                                                              ),
+                                                            ),
+                                                            TextButton(
+                                                              onPressed: () {
+                                                                setState(() {
+                                                                  UserStore
+                                                                      .users
+                                                                      .remove(
+                                                                        user,
+                                                                      );
+                                                                });
+                                                                Navigator.pop(
+                                                                  context,
+                                                                );
+                                                                ScaffoldMessenger.of(
+                                                                  context,
+                                                                ).showSnackBar(
+                                                                  SnackBar(
+                                                                    content: Text(
+                                                                      '${user['name']} has been deleted',
+                                                                    ),
+                                                                    backgroundColor:
+                                                                        Colors
+                                                                            .red,
                                                                   ),
-                                                                  backgroundColor:
+                                                                );
+                                                              },
+                                                              child: const Text(
+                                                                'Delete',
+                                                                style: TextStyle(
+                                                                  color:
                                                                       Colors
                                                                           .red,
                                                                 ),
-                                                              );
-                                                            },
-                                                            child: const Text(
-                                                              'Delete',
-                                                              style: TextStyle(
-                                                                color:
-                                                                    Colors.red,
                                                               ),
                                                             ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                );
-                                              },
-                                            ),
-                                          ],
+                                                          ],
+                                                        ),
+                                                  );
+                                                },
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                                .toList(),
+                                      ],
+                                    ),
+                                  )
+                                  .toList(),
+                        ),
                       ),
                     ),
                   ],
@@ -531,7 +548,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
       case 2:
         return const Reports();
       case 3:
-        return const Settings();
+        return Settings(
+          onViewReports: () {
+            setState(() {
+              _selectedIndex = 2;
+            });
+          },
+        );
       default:
         return _buildDashboard();
     }

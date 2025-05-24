@@ -8,7 +8,61 @@ class ReviewManager {
     _loadFromHive();
   }
 
-  final List<Map<String, dynamic>> _pendingReviews = [];
+  final List<Map<String, dynamic>> _pendingReviews = [
+    // Pending review sample
+    {
+      'id': 'review_001',
+      'userId': 'user_001',
+      'userName': 'John Doe',
+      'status': 'pending',
+      'submittedAt': '2024-06-20T10:00:00',
+      'images': [
+        {'path': 'assets/sample1.jpg', 'detections': []},
+      ],
+      'diseaseSummary': [
+        {'disease': 'Anthracnose', 'averageConfidence': 0.92},
+      ],
+      'notes': 'Leaf spots observed.',
+    },
+    // Completed review sample
+    {
+      'id': 'review_002',
+      'userId': 'user_002',
+      'userName': 'Jane Smith',
+      'status': 'reviewed',
+      'submittedAt': '2024-06-19T14:30:00',
+      'images': [
+        {'path': 'assets/sample2.jpg', 'detections': []},
+      ],
+      'diseaseSummary': [
+        {'disease': 'Powdery Mildew', 'averageConfidence': 0.85},
+      ],
+      'notes': 'White powdery spots.',
+      'expertReview': {
+        'comment': 'Confirmed Powdery Mildew. Recommend fungicide treatment.',
+        'severityAssessment': {
+          'level': 'medium',
+          'confidence': 0.85,
+          'notes': 'Expert assessment based on image analysis',
+        },
+        'treatmentPlan': {
+          'recommendations': [
+            {
+              'treatment': 'Apply sulfur-based fungicide',
+              'dosage': '2g/L',
+              'frequency': 'Every 7 days',
+              'precautions': 'Avoid during rain',
+            },
+          ],
+          'preventiveMeasures': [
+            'Regular pruning',
+            'Proper spacing between plants',
+          ],
+        },
+        'reviewedAt': '2024-06-20T12:00:00',
+      },
+    },
+  ];
   final _uuid = const Uuid();
   final String _boxName = 'reviews';
 

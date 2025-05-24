@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'scan_request_detail.dart';
 import '../shared/review_manager.dart';
 import 'dart:io';
+import '../user/user_request_list.dart';
 
 class ScanRequestList extends StatefulWidget {
   const ScanRequestList({Key? key}) : super(key: key);
@@ -41,9 +42,24 @@ class _ScanRequestListState extends State<ScanRequestList>
   }
 
   List<Map<String, dynamic>> get _completedRequests {
-    return _reviewManager.pendingReviews
-        .where((request) => request['status'] == 'reviewed')
-        .toList();
+    // Combine expert's completed requests with user's completed requests
+    final expertCompleted =
+        _reviewManager.pendingReviews
+            .where((request) => request['status'] == 'reviewed')
+            .toList();
+    final userCompleted =
+        userRequests
+            .where((request) => request['status'] == 'completed')
+            .toList();
+    // Optionally, avoid duplicates by requestId
+    final allCompleted = <String, Map<String, dynamic>>{};
+    for (final req in expertCompleted) {
+      allCompleted[req['requestId'] ?? req['id'] ?? ''] = req;
+    }
+    for (final req in userCompleted) {
+      allCompleted[req['requestId'] ?? req['id'] ?? ''] = req;
+    }
+    return allCompleted.values.toList();
   }
 
   List<Map<String, dynamic>> _filterRequests(
@@ -200,16 +216,7 @@ class _ScanRequestListState extends State<ScanRequestList>
                   height: 80,
                   child:
                       request['images']?[0]?['path'] != null
-                          ? Image.file(
-                            File(request['images'][0]['path']),
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: Colors.grey[200],
-                                child: const Icon(Icons.image_not_supported),
-                              );
-                            },
-                          )
+                          ? _buildImageWidget(request['images'][0]['path'])
                           : Container(
                             color: Colors.grey[200],
                             child: const Icon(Icons.image_not_supported),
@@ -376,5 +383,33 @@ class _ScanRequestListState extends State<ScanRequestList>
         ),
       ),
     );
+  }
+
+  Widget _buildImageWidget(String path) {
+    if (path.startsWith('/') || path.contains(':')) {
+      // File path
+      return Image.file(
+        File(path),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Colors.grey[200],
+            child: const Icon(Icons.image_not_supported),
+          );
+        },
+      );
+    } else {
+      // Asset path
+      return Image.asset(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Colors.grey[200],
+            child: const Icon(Icons.image_not_supported),
+          );
+        },
+      );
+    }
   }
 }
