@@ -57,7 +57,7 @@ class _ReportsState extends State<Reports> {
       case 'anthracnose':
         return Colors.orange;
       case 'bacterial blackspot':
-        return Colors.red;
+        return Colors.purple;
       case 'powdery mildew':
         return const Color.fromARGB(255, 9, 46, 2);
       case 'dieback':
@@ -573,11 +573,11 @@ class _DiseaseDistributionChartState extends State<DiseaseDistributionChart> {
       case 'anthracnose':
         return Colors.orange;
       case 'bacterial blackspot':
-        return Colors.red;
+        return Colors.purple;
       case 'powdery mildew':
         return const Color.fromARGB(255, 9, 46, 2);
       case 'dieback':
-        return Colors.brown;
+        return Colors.red;
       case 'tip burn':
         return Colors.amber;
       case 'healthy':

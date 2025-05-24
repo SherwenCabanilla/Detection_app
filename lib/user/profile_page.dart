@@ -2,9 +2,31 @@ import 'package:flutter/material.dart';
 import 'login_page.dart';
 import 'edit_profile_page.dart';
 import '../about_app_page.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  File? _profileImage;
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _pickProfileImage() async {
+    final XFile? pickedFile = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (pickedFile != null) {
+      setState(() {
+        _profileImage = File(pickedFile.path);
+      });
+    }
+  }
 
   Widget _buildProfileOption({
     required String title,
@@ -61,25 +83,38 @@ class ProfilePage extends StatelessWidget {
                           border: Border.all(color: Colors.white, width: 4),
                           color: Colors.white,
                         ),
-                        child: const Icon(
-                          Icons.person,
-                          size: 70,
-                          color: Colors.green,
-                        ),
+                        child:
+                            _profileImage != null
+                                ? ClipOval(
+                                  child: Image.file(
+                                    _profileImage!,
+                                    width: 120,
+                                    height: 120,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                                : const Icon(
+                                  Icons.person,
+                                  size: 70,
+                                  color: Colors.green,
+                                ),
                       ),
                       Positioned(
                         bottom: 0,
                         right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.camera_alt,
-                            size: 20,
-                            color: Colors.green,
+                        child: GestureDetector(
+                          onTap: _pickProfileImage,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt,
+                              size: 20,
+                              color: Colors.green,
+                            ),
                           ),
                         ),
                       ),
@@ -206,7 +241,6 @@ class ProfilePage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-
             // App Version
             const SizedBox(height: 24),
           ],

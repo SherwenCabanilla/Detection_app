@@ -305,7 +305,7 @@ class _HomePageState extends State<HomePage> {
                             ),
                             _buildDiseaseCard(
                               'Powdery Mildew',
-                              'assets/diseases/powdery_mildew.jpg',
+                              'assets/diseases/powdery_mildew3.jpg',
                             ),
                             const SizedBox(height: 16),
                             const Padding(

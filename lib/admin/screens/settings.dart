@@ -102,8 +102,145 @@ class _SettingsState extends State<Settings> {
                           subtitle: const Text(
                             'Update your admin account password',
                           ),
-                          onTap: () {
-                            // Navigate to password change
+                          onTap: () async {
+                            final currentPasswordController =
+                                TextEditingController();
+                            final newPasswordController =
+                                TextEditingController();
+                            final confirmPasswordController =
+                                TextEditingController();
+                            String? errorMessage;
+                            final result = await showDialog<bool>(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (context) {
+                                return StatefulBuilder(
+                                  builder: (context, setState) {
+                                    return AlertDialog(
+                                      title: const Text('Change Password'),
+                                      content: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          TextField(
+                                            controller:
+                                                currentPasswordController,
+                                            obscureText: true,
+                                            decoration: const InputDecoration(
+                                              labelText: 'Current Password',
+                                            ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          TextField(
+                                            controller: newPasswordController,
+                                            obscureText: true,
+                                            decoration: const InputDecoration(
+                                              labelText: 'New Password',
+                                            ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          TextField(
+                                            controller:
+                                                confirmPasswordController,
+                                            obscureText: true,
+                                            decoration: const InputDecoration(
+                                              labelText: 'Confirm New Password',
+                                            ),
+                                          ),
+                                          if (errorMessage != null) ...[
+                                            const SizedBox(height: 10),
+                                            Text(
+                                              errorMessage!,
+                                              style: const TextStyle(
+                                                color: Colors.red,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed:
+                                              () =>
+                                                  Navigator.pop(context, false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            showDialog(
+                                              context: context,
+                                              builder:
+                                                  (context) => AlertDialog(
+                                                    title: const Text(
+                                                      'Forgot Password?',
+                                                    ),
+                                                    content: const Text(
+                                                      'Please contact the system administrator to reset your password.',
+                                                    ),
+                                                    actions: [
+                                                      TextButton(
+                                                        onPressed:
+                                                            () => Navigator.pop(
+                                                              context,
+                                                            ),
+                                                        child: const Text('OK'),
+                                                      ),
+                                                    ],
+                                                  ),
+                                            );
+                                          },
+                                          child: const Text('Forgot Password?'),
+                                        ),
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            final current =
+                                                currentPasswordController.text
+                                                    .trim();
+                                            final newPass =
+                                                newPasswordController.text
+                                                    .trim();
+                                            final confirm =
+                                                confirmPasswordController.text
+                                                    .trim();
+                                            if (current.isEmpty ||
+                                                newPass.isEmpty ||
+                                                confirm.isEmpty) {
+                                              setState(() {
+                                                errorMessage =
+                                                    'All fields are required.';
+                                              });
+                                              return;
+                                            }
+                                            if (newPass != confirm) {
+                                              setState(() {
+                                                errorMessage =
+                                                    'New passwords do not match.';
+                                              });
+                                              return;
+                                            }
+                                            // Here you would add logic to verify the current password and update it.
+                                            Navigator.pop(context, true);
+                                          },
+                                          child: const Text('Save'),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                            if (result == true) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Password changed successfully!',
+                                    ),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            }
                           },
                         ),
                       ),

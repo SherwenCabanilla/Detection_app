@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/user_store.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 class UserManagement extends StatefulWidget {
   const UserManagement({Key? key}) : super(key: key);
@@ -266,175 +268,551 @@ class _UserManagementState extends State<UserManagement> {
                                                     );
                                                 String status = user['status'];
                                                 String role = user['role'];
+                                                // Assume user['profileImage'] holds the image path, or null
+                                                final String? profileImagePath =
+                                                    user['profileImage'];
 
                                                 final result = await showDialog<
                                                   Map<String, dynamic>
                                                 >(
                                                   context: context,
                                                   builder: (context) {
-                                                    return AlertDialog(
-                                                      title: const Text(
-                                                        'Edit User',
+                                                    return Dialog(
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              16.0,
+                                                            ),
                                                       ),
-                                                      content: SingleChildScrollView(
-                                                        child: Column(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          children: [
-                                                            TextField(
-                                                              controller:
-                                                                  nameController,
-                                                              decoration:
-                                                                  const InputDecoration(
-                                                                    labelText:
-                                                                        'Name',
-                                                                  ),
+                                                      elevation: 0,
+                                                      backgroundColor:
+                                                          Colors.white,
+                                                      child: ConstrainedBox(
+                                                        constraints:
+                                                            const BoxConstraints(
+                                                              maxWidth: 400,
                                                             ),
-                                                            TextField(
-                                                              controller:
-                                                                  emailController,
-                                                              decoration:
-                                                                  const InputDecoration(
-                                                                    labelText:
-                                                                        'Email',
+                                                        child: SingleChildScrollView(
+                                                          child: Padding(
+                                                            padding:
+                                                                const EdgeInsets.all(
+                                                                  24.0,
+                                                                ),
+                                                            child: Column(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+                                                                Align(
+                                                                  alignment:
+                                                                      Alignment
+                                                                          .center,
+                                                                  child: Column(
+                                                                    children: [
+                                                                      CircleAvatar(
+                                                                        radius:
+                                                                            40,
+                                                                        backgroundImage:
+                                                                            (profileImagePath !=
+                                                                                        null &&
+                                                                                    profileImagePath.isNotEmpty)
+                                                                                ? FileImage(
+                                                                                      File(
+                                                                                        profileImagePath,
+                                                                                      ),
+                                                                                    )
+                                                                                    as ImageProvider<
+                                                                                      Object
+                                                                                    >?
+                                                                                : null,
+                                                                        child:
+                                                                            (profileImagePath ==
+                                                                                        null ||
+                                                                                    profileImagePath.isEmpty)
+                                                                                ? const Icon(
+                                                                                  Icons.person,
+                                                                                  size:
+                                                                                      50,
+                                                                                  color:
+                                                                                      Colors.green,
+                                                                                )
+                                                                                : null,
+                                                                      ),
+                                                                      const SizedBox(
+                                                                        height:
+                                                                            8,
+                                                                      ),
+                                                                      const SizedBox(
+                                                                        height:
+                                                                            12,
+                                                                      ),
+                                                                      Text(
+                                                                        user['name'],
+                                                                        style: const TextStyle(
+                                                                          fontSize:
+                                                                              18,
+                                                                          fontWeight:
+                                                                              FontWeight.bold,
+                                                                        ),
+                                                                      ),
+                                                                      Text(
+                                                                        user['email'],
+                                                                        style: const TextStyle(
+                                                                          fontSize:
+                                                                              13,
+                                                                          color:
+                                                                              Colors.grey,
+                                                                        ),
+                                                                      ),
+                                                                    ],
                                                                   ),
-                                                            ),
-                                                            TextField(
-                                                              controller:
-                                                                  addressController,
-                                                              decoration:
-                                                                  const InputDecoration(
-                                                                    labelText:
-                                                                        'Address',
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 20,
+                                                                ),
+
+                                                                const Text(
+                                                                  'Name',
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 6,
+                                                                ),
+                                                                TextField(
+                                                                  controller:
+                                                                      nameController,
+                                                                  decoration: InputDecoration(
+                                                                    hintText:
+                                                                        'Enter name',
+                                                                    border: OutlineInputBorder(
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            8,
+                                                                          ),
+                                                                    ),
+                                                                    contentPadding: const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          12,
+                                                                      vertical:
+                                                                          10,
+                                                                    ),
+                                                                    isDense:
+                                                                        true,
                                                                   ),
-                                                            ),
-                                                            TextField(
-                                                              controller:
-                                                                  phoneController,
-                                                              decoration:
-                                                                  const InputDecoration(
-                                                                    labelText:
-                                                                        'Phone Number',
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 14,
+                                                                ),
+
+                                                                const Text(
+                                                                  'Email address',
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 6,
+                                                                ),
+                                                                TextField(
+                                                                  controller:
+                                                                      emailController,
+                                                                  decoration: InputDecoration(
+                                                                    hintText:
+                                                                        'Enter email',
+                                                                    border: OutlineInputBorder(
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            8,
+                                                                          ),
+                                                                    ),
+                                                                    contentPadding: const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          12,
+                                                                      vertical:
+                                                                          10,
+                                                                    ),
+                                                                    prefixIcon:
+                                                                        const Icon(
+                                                                          Icons
+                                                                              .email_outlined,
+                                                                        ),
+                                                                    isDense:
+                                                                        true,
                                                                   ),
-                                                              keyboardType:
-                                                                  TextInputType
-                                                                      .phone,
-                                                            ),
-                                                            DropdownButtonFormField<
-                                                              String
-                                                            >(
-                                                              value: status,
-                                                              items:
-                                                                  [
-                                                                        'pending',
-                                                                        'active',
-                                                                      ]
-                                                                      .map(
-                                                                        (
-                                                                          s,
-                                                                        ) => DropdownMenuItem(
-                                                                          value:
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 14,
+                                                                ),
+
+                                                                const Text(
+                                                                  'Address',
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 6,
+                                                                ),
+                                                                TextField(
+                                                                  controller:
+                                                                      addressController,
+                                                                  decoration: InputDecoration(
+                                                                    hintText:
+                                                                        'Enter address',
+                                                                    border: OutlineInputBorder(
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            8,
+                                                                          ),
+                                                                    ),
+                                                                    contentPadding: const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          12,
+                                                                      vertical:
+                                                                          10,
+                                                                    ),
+                                                                    isDense:
+                                                                        true,
+                                                                  ),
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 14,
+                                                                ),
+
+                                                                const Text(
+                                                                  'Phone Number',
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 6,
+                                                                ),
+                                                                TextField(
+                                                                  controller:
+                                                                      phoneController,
+                                                                  decoration: InputDecoration(
+                                                                    hintText:
+                                                                        'Enter phone number',
+                                                                    border: OutlineInputBorder(
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            8,
+                                                                          ),
+                                                                    ),
+                                                                    contentPadding: const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          12,
+                                                                      vertical:
+                                                                          10,
+                                                                    ),
+                                                                    isDense:
+                                                                        true,
+                                                                  ),
+                                                                  keyboardType:
+                                                                      TextInputType
+                                                                          .phone,
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 14,
+                                                                ),
+
+                                                                const Text(
+                                                                  'Status',
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 6,
+                                                                ),
+                                                                DropdownButtonFormField<
+                                                                  String
+                                                                >(
+                                                                  value: status,
+                                                                  items:
+                                                                      [
+                                                                            'pending',
+                                                                            'active',
+                                                                          ]
+                                                                          .map(
+                                                                            (
                                                                               s,
-                                                                          child: Text(
-                                                                            s[0].toUpperCase() +
-                                                                                s.substring(1),
+                                                                            ) => DropdownMenuItem(
+                                                                              value:
+                                                                                  s,
+                                                                              child: Text(
+                                                                                s[0]
+                                                                                        .toUpperCase() +
+                                                                                    s.substring(
+                                                                                      1,
+                                                                                    ),
+                                                                              ),
+                                                                            ),
+                                                                          )
+                                                                          .toList(),
+                                                                  onChanged: (
+                                                                    value,
+                                                                  ) {
+                                                                    if (value !=
+                                                                        null)
+                                                                      status =
+                                                                          value;
+                                                                  },
+                                                                  decoration: InputDecoration(
+                                                                    border: OutlineInputBorder(
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            8,
                                                                           ),
-                                                                        ),
-                                                                      )
-                                                                      .toList(),
-                                                              onChanged: (
-                                                                value,
-                                                              ) {
-                                                                if (value !=
-                                                                    null)
-                                                                  status =
-                                                                      value;
-                                                              },
-                                                              decoration:
-                                                                  const InputDecoration(
-                                                                    labelText:
-                                                                        'Status',
+                                                                    ),
+                                                                    contentPadding: const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          12,
+                                                                      vertical:
+                                                                          10,
+                                                                    ),
+                                                                    isDense:
+                                                                        true,
                                                                   ),
-                                                            ),
-                                                            DropdownButtonFormField<
-                                                              String
-                                                            >(
-                                                              value: role,
-                                                              items:
-                                                                  [
-                                                                        'user',
-                                                                        'expert',
-                                                                      ]
-                                                                      .map(
-                                                                        (
-                                                                          r,
-                                                                        ) => DropdownMenuItem(
-                                                                          value:
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 14,
+                                                                ),
+
+                                                                const Text(
+                                                                  'Role',
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 6,
+                                                                ),
+                                                                DropdownButtonFormField<
+                                                                  String
+                                                                >(
+                                                                  value: role,
+                                                                  items:
+                                                                      [
+                                                                            'user',
+                                                                            'expert',
+                                                                          ]
+                                                                          .map(
+                                                                            (
                                                                               r,
-                                                                          child: Text(
-                                                                            r[0].toUpperCase() +
-                                                                                r.substring(1),
+                                                                            ) => DropdownMenuItem(
+                                                                              value:
+                                                                                  r,
+                                                                              child: Text(
+                                                                                r[0]
+                                                                                        .toUpperCase() +
+                                                                                    r.substring(
+                                                                                      1,
+                                                                                    ),
+                                                                              ),
+                                                                            ),
+                                                                          )
+                                                                          .toList(),
+                                                                  onChanged: (
+                                                                    value,
+                                                                  ) {
+                                                                    if (value !=
+                                                                        null)
+                                                                      role =
+                                                                          value;
+                                                                  },
+                                                                  decoration: InputDecoration(
+                                                                    border: OutlineInputBorder(
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            8,
+                                                                          ),
+                                                                    ),
+                                                                    contentPadding: const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          12,
+                                                                      vertical:
+                                                                          10,
+                                                                    ),
+                                                                    isDense:
+                                                                        true,
+                                                                  ),
+                                                                ),
+                                                                const SizedBox(
+                                                                  height: 20,
+                                                                ),
+
+                                                                Row(
+                                                                  mainAxisAlignment:
+                                                                      MainAxisAlignment
+                                                                          .spaceBetween,
+                                                                  children: [
+                                                                    Expanded(
+                                                                      child: ElevatedButton.icon(
+                                                                        onPressed: () {
+                                                                          showDialog(
+                                                                            context:
+                                                                                context,
+                                                                            builder:
+                                                                                (
+                                                                                  context,
+                                                                                ) => AlertDialog(
+                                                                                  title: const Text(
+                                                                                    'Delete User',
+                                                                                  ),
+                                                                                  content: Text(
+                                                                                    'Are you sure you want to delete ${user['name']}?',
+                                                                                  ),
+                                                                                  actions: [
+                                                                                    TextButton(
+                                                                                      onPressed:
+                                                                                          () => Navigator.pop(
+                                                                                            context,
+                                                                                          ),
+                                                                                      child: const Text(
+                                                                                        'Cancel',
+                                                                                      ),
+                                                                                    ),
+                                                                                    TextButton(
+                                                                                      onPressed: () {
+                                                                                        setState(
+                                                                                          () {
+                                                                                            UserStore.users.remove(
+                                                                                              user,
+                                                                                            );
+                                                                                          },
+                                                                                        );
+                                                                                        Navigator.pop(
+                                                                                          context,
+                                                                                        );
+                                                                                        Navigator.pop(
+                                                                                          context,
+                                                                                          {
+                                                                                            'deleted':
+                                                                                                true,
+                                                                                          },
+                                                                                        );
+                                                                                        ScaffoldMessenger.of(
+                                                                                          context,
+                                                                                        ).showSnackBar(
+                                                                                          SnackBar(
+                                                                                            content: Text(
+                                                                                              '${user['name']} has been deleted',
+                                                                                            ),
+                                                                                            backgroundColor:
+                                                                                                Colors.red,
+                                                                                          ),
+                                                                                        );
+                                                                                      },
+                                                                                      child: const Text(
+                                                                                        'Delete',
+                                                                                      ),
+                                                                                    ),
+                                                                                  ],
+                                                                                ),
+                                                                          );
+                                                                        },
+                                                                        icon: const Icon(
+                                                                          Icons
+                                                                              .delete_outline,
+                                                                          color:
+                                                                              Colors.red,
+                                                                        ),
+                                                                        label: const Text(
+                                                                          'Delete user',
+                                                                          style: TextStyle(
+                                                                            color:
+                                                                                Colors.red,
                                                                           ),
                                                                         ),
-                                                                      )
-                                                                      .toList(),
-                                                              onChanged: (
-                                                                value,
-                                                              ) {
-                                                                if (value !=
-                                                                    null)
-                                                                  role = value;
-                                                              },
-                                                              decoration:
-                                                                  const InputDecoration(
-                                                                    labelText:
-                                                                        'Role',
-                                                                  ),
+                                                                        style: ElevatedButton.styleFrom(
+                                                                          backgroundColor: Colors.red.withOpacity(
+                                                                            0.1,
+                                                                          ),
+                                                                          elevation:
+                                                                              0,
+                                                                          shape: RoundedRectangleBorder(
+                                                                            borderRadius: BorderRadius.circular(
+                                                                              8,
+                                                                            ),
+                                                                          ),
+                                                                          padding: const EdgeInsets.symmetric(
+                                                                            horizontal:
+                                                                                12,
+                                                                            vertical:
+                                                                                8,
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                    const SizedBox(
+                                                                      width: 16,
+                                                                    ),
+                                                                    TextButton(
+                                                                      onPressed:
+                                                                          () => Navigator.pop(
+                                                                            context,
+                                                                            null,
+                                                                          ),
+                                                                      child: const Text(
+                                                                        'Cancel',
+                                                                        style: TextStyle(
+                                                                          color:
+                                                                              Colors.grey,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                    const SizedBox(
+                                                                      width: 16,
+                                                                    ),
+                                                                    ElevatedButton(
+                                                                      onPressed: () {
+                                                                        Navigator.pop(
+                                                                          context,
+                                                                          {
+                                                                            'name':
+                                                                                nameController.text,
+                                                                            'email':
+                                                                                emailController.text,
+                                                                            'address':
+                                                                                addressController.text,
+                                                                            'phone':
+                                                                                phoneController.text,
+                                                                            'status':
+                                                                                status,
+                                                                            'role':
+                                                                                role,
+                                                                          },
+                                                                        );
+                                                                      },
+                                                                      style: ElevatedButton.styleFrom(
+                                                                        backgroundColor:
+                                                                            Colors.black,
+                                                                        foregroundColor:
+                                                                            Colors.white,
+                                                                        shape: RoundedRectangleBorder(
+                                                                          borderRadius:
+                                                                              BorderRadius.circular(
+                                                                                8,
+                                                                              ),
+                                                                        ),
+                                                                        padding: const EdgeInsets.symmetric(
+                                                                          horizontal:
+                                                                              16,
+                                                                          vertical:
+                                                                              8,
+                                                                        ),
+                                                                      ),
+                                                                      child: const Text(
+                                                                        'Save changes',
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ],
                                                             ),
-                                                          ],
+                                                          ),
                                                         ),
                                                       ),
-                                                      actions: [
-                                                        TextButton(
-                                                          onPressed:
-                                                              () =>
-                                                                  Navigator.pop(
-                                                                    context,
-                                                                    null,
-                                                                  ),
-                                                          child: const Text(
-                                                            'Cancel',
-                                                          ),
-                                                        ),
-                                                        ElevatedButton(
-                                                          onPressed: () {
-                                                            Navigator.pop(context, {
-                                                              'name':
-                                                                  nameController
-                                                                      .text,
-                                                              'email':
-                                                                  emailController
-                                                                      .text,
-                                                              'address':
-                                                                  addressController
-                                                                      .text,
-                                                              'phone':
-                                                                  phoneController
-                                                                      .text,
-                                                              'status': status,
-                                                              'role': role,
-                                                            });
-                                                          },
-                                                          child: const Text(
-                                                            'Save',
-                                                          ),
-                                                        ),
-                                                      ],
                                                     );
                                                   },
                                                 );
 
-                                                if (result != null) {
+                                                if (result != null &&
+                                                    result.containsKey(
+                                                      'deleted',
+                                                    ) &&
+                                                    result['deleted']) {
+                                                  // User was deleted, no need to update fields
+                                                } else if (result != null) {
                                                   setState(() {
                                                     user['name'] =
                                                         result['name'];
@@ -461,70 +839,6 @@ class _UserManagementState extends State<UserManagement> {
                                                     ),
                                                   );
                                                 }
-                                              },
-                                            ),
-                                          ),
-                                          Align(
-                                            alignment: Alignment.center,
-                                            child: IconButton(
-                                              icon: const Icon(Icons.delete),
-                                              color: Colors.red,
-                                              tooltip: 'Delete User',
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              onPressed: () {
-                                                showDialog(
-                                                  context: context,
-                                                  builder:
-                                                      (context) => AlertDialog(
-                                                        title: const Text(
-                                                          'Delete User',
-                                                        ),
-                                                        content: Text(
-                                                          'Are you sure you want to delete ${user['name']}?',
-                                                        ),
-                                                        actions: [
-                                                          TextButton(
-                                                            onPressed:
-                                                                () =>
-                                                                    Navigator.pop(
-                                                                      context,
-                                                                    ),
-                                                            child: const Text(
-                                                              'Cancel',
-                                                            ),
-                                                          ),
-                                                          TextButton(
-                                                            onPressed: () {
-                                                              setState(() {
-                                                                UserStore.users
-                                                                    .remove(
-                                                                      user,
-                                                                    );
-                                                              });
-                                                              Navigator.pop(
-                                                                context,
-                                                              );
-                                                              ScaffoldMessenger.of(
-                                                                context,
-                                                              ).showSnackBar(
-                                                                SnackBar(
-                                                                  content: Text(
-                                                                    '${user['name']} has been deleted',
-                                                                  ),
-                                                                  backgroundColor:
-                                                                      Colors
-                                                                          .red,
-                                                                ),
-                                                              );
-                                                            },
-                                                            child: const Text(
-                                                              'Delete',
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                );
                                               },
                                             ),
                                           ),

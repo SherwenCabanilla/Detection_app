@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../routes.dart';
 import '../about_app_page.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 class ExpertProfile extends StatefulWidget {
   const ExpertProfile({Key? key}) : super(key: key);
@@ -10,6 +12,21 @@ class ExpertProfile extends StatefulWidget {
 }
 
 class _ExpertProfileState extends State<ExpertProfile> {
+  File? _profileImage;
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _pickProfileImage() async {
+    final XFile? pickedFile = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (pickedFile != null) {
+      setState(() {
+        _profileImage = File(pickedFile.path);
+      });
+    }
+  }
+
   Widget _buildStat(String label, String value, {VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -315,37 +332,55 @@ class _ExpertProfileState extends State<ExpertProfile> {
                   children: [
                     Container(
                       margin: const EdgeInsets.only(top: 16),
-                      width: 120,
-                      height: 120,
+                      width: 140,
+                      height: 140,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 4),
                         color: Colors.white,
                       ),
-                      child: const Icon(
-                        Icons.person,
-                        size: 80,
-                        color: Colors.green,
-                      ),
+                      child:
+                          _profileImage != null
+                              ? ClipOval(
+                                child: Image.file(
+                                  _profileImage!,
+                                  width: 140,
+                                  height: 140,
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                              : const Icon(
+                                Icons.person,
+                                size: 90,
+                                color: Colors.green,
+                              ),
                     ),
                     Positioned(
                       bottom: 0,
                       right: 0,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
+                      child: GestureDetector(
+                        onTap: _pickProfileImage,
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.camera_alt,
+                              size: 22,
+                              color: Colors.green,
                             ),
-                          ],
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.green),
-                          onPressed: () => _showEditProfileDialog(context),
+                          ),
                         ),
                       ),
                     ),
