@@ -30,8 +30,9 @@ class TFLiteDetector {
   List<String> _classificationLabels = [];
 
   static const double confidenceThreshold =
-      0.20; // Objectness threshold for YOLO
-  static const double nmsThreshold = 0.3;
+      0.10; // YOLO confidence threshold (higher = fewer, more reliable boxes)
+  static const double nmsThreshold =
+      0.9; // NMS IoU: balances merging overlaps vs keeping neighbors
   static const double mobilenetConfidenceThreshold =
       0.75; // Minimum confidence threshold for MobileNet classification
   static const int yoloInputSize = 640;
@@ -77,9 +78,7 @@ class TFLiteDetector {
               .toList();
 
       // Load YOLO model (1 class detection)
-      _yoloInterpreter = await Interpreter.fromAsset(
-        'assets/classification_model.tflite',
-      );
+      _yoloInterpreter = await Interpreter.fromAsset('assets/v2trash.tflite');
 
       // Load MobileNetV3 ONNX model (9 class classification)
       final onnxBytes = await rootBundle.load('assets/extension_model.onnx');
@@ -320,10 +319,11 @@ class TFLiteDetector {
         input[j + 2] = pixels[i + 2] / 255.0;
       }
 
-      // YOLO output shape: (1, 5, 8400)
-      // [x, y, w, h, objectness]
+      // YOLO26 output shape: (1, 300, 6)
+      // Post-processed detections: [x, y, w, h, confidence, class_id]
+      // Using this format avoids the shape mismatch you see in the logs: [1, 300, 6]
       final inputShape = [1, yoloInputSize, yoloInputSize, 3];
-      final outputShape = [1, 5, 8400];
+      final outputShape = [1, 300, 6];
 
       final output = List.filled(
         outputShape.reduce((a, b) => a * b),
@@ -332,7 +332,7 @@ class TFLiteDetector {
 
       _yoloInterpreter!.run(input.reshape(inputShape), output);
 
-      final outputData = output[0]; // Shape: (5, 8400)
+      final outputData = output[0]; // Shape: (300, 6)
 
       print('🔍 Detection Debug Info:');
       print('   - Image size: ${image.width}x${image.height}');
@@ -343,10 +343,15 @@ class TFLiteDetector {
       print('   - Classification labels: ${_classificationLabels.length}');
       print('   - Confidence threshold: $_currentConfidenceThreshold');
 
-      // Extract bounding boxes from YOLO output
+      // Extract bounding boxes from YOLO26 output (post-processed [1, 300, 6])
+      // For Ultralytics TFLite exports, the detection head typically returns
+      // [x1, y1, x2, y2, confidence, class_id] NORMALIZED to the network
+      // input size (640x640) after letterboxing. So we:
+      //  - treat [x1, y1, x2, y2] as corner-format, normalized 0–1 wrt 640x640
+      //  - map from 640x640 letterboxed space back to the ORIGINAL image.
       final detections = <Map<String, dynamic>>[];
 
-      // Calculate letterboxing parameters
+      // Letterboxing parameters (how we resized the original image into 640x640)
       final scale = math.min(
         yoloInputSize / image.width,
         yoloInputSize / image.height,
@@ -356,68 +361,144 @@ class TFLiteDetector {
       final padX = (yoloInputSize - newUnpaddedW) / 2;
       final padY = (yoloInputSize - newUnpaddedH) / 2;
 
-      for (var i = 0; i < 8400; i++) {
-        // YOLO output format: [x, y, w, h, objectness]
-        final centerX = outputData[0][i]; // Normalized 0-1
-        final centerY = outputData[1][i]; // Normalized 0-1
-        final width = outputData[2][i]; // Normalized 0-1
-        final height = outputData[3][i]; // Normalized 0-1
-        final objectness = outputData[4][i]; // Objectness score
+      // Minimum box size (as percentage of image) to filter out tiny noise.
+      // We deliberately DO NOT cap the maximum size so that a single large
+      // leaf filling most of the image is still allowed as a valid detection.
+      const minBoxSizePercent = 0.01; // 1% of image size
+      final minBoxWidth = image.width * minBoxSizePercent;
+      final minBoxHeight = image.height * minBoxSizePercent;
 
-        // Filter by objectness threshold
-        if (objectness > _currentConfidenceThreshold) {
-          // Convert from YOLO normalized coordinates to original image coordinates
-          final yoloCenterX = centerX * yoloInputSize;
-          final yoloCenterY = centerY * yoloInputSize;
-          final yoloWidth = width * yoloInputSize;
-          final yoloHeight = height * yoloInputSize;
+      for (var i = 0; i < 300; i++) {
+        // YOLO26 output format (TFLite): [x1, y1, x2, y2, confidence, class_id]
+        final detection = outputData[i];
 
-          // Remove padding and scale back to original image space
-          final originalCenterX = (yoloCenterX - padX) / scale;
-          final originalCenterY = (yoloCenterY - padY) / scale;
-          final originalWidth = yoloWidth / scale;
-          final originalHeight = yoloHeight / scale;
+        final x1n =
+            (detection[0] as num).toDouble(); // Normalized 0-1 (640 space)
+        final y1n =
+            (detection[1] as num).toDouble(); // Normalized 0-1 (640 space)
+        final x2n =
+            (detection[2] as num).toDouble(); // Normalized 0-1 (640 space)
+        final y2n =
+            (detection[3] as num).toDouble(); // Normalized 0-1 (640 space)
+        final confidence = (detection[4] as num).toDouble(); // Confidence score
+        // detection[5] is class_id (not used here, MobileNet handles class)
 
-          // Convert center point and dimensions to LTRB format
-          final left = originalCenterX - (originalWidth / 2);
-          final top = originalCenterY - (originalHeight / 2);
-          final right = originalCenterX + (originalWidth / 2);
-          final bottom = originalCenterY + (originalHeight / 2);
-
-          final box = Rect.fromLTRB(left, top, right, bottom);
-
-          detections.add({'box': box, 'objectness': objectness});
+        // Skip invalid / low-confidence detections
+        if (confidence <= 0 || confidence < _currentConfidenceThreshold) {
+          continue;
         }
+
+        // Validate coordinates
+        if (x1n < 0 ||
+            x1n > 1 ||
+            y1n < 0 ||
+            y1n > 1 ||
+            x2n < 0 ||
+            x2n > 1 ||
+            y2n < 0 ||
+            y2n > 1 ||
+            x2n <= x1n ||
+            y2n <= y1n) {
+          continue;
+        }
+
+        // Convert normalized 0–1 coords into 640x640 letterboxed pixels
+        final yoloLeft = x1n * yoloInputSize;
+        final yoloTop = y1n * yoloInputSize;
+        final yoloRight = x2n * yoloInputSize;
+        final yoloBottom = y2n * yoloInputSize;
+
+        // Remove padding and scale back to original image space
+        final originalLeft = (yoloLeft - padX) / scale;
+        final originalTop = (yoloTop - padY) / scale;
+        final originalRight = (yoloRight - padX) / scale;
+        final originalBottom = (yoloBottom - padY) / scale;
+
+        // Clamp to image bounds
+        final clampedLeft = math.max(
+          0.0,
+          math.min(originalLeft, image.width.toDouble()),
+        );
+        final clampedTop = math.max(
+          0.0,
+          math.min(originalTop, image.height.toDouble()),
+        );
+        final clampedRight = math.max(
+          0.0,
+          math.min(originalRight, image.width.toDouble()),
+        );
+        final clampedBottom = math.max(
+          0.0,
+          math.min(originalBottom, image.height.toDouble()),
+        );
+
+        final boxWidth = clampedRight - clampedLeft;
+        final boxHeight = clampedBottom - clampedTop;
+
+        // Filter out boxes that are too small (likely noise). Large boxes
+        // are now allowed so that single-object close-up images are kept.
+        if (boxWidth < minBoxWidth || boxHeight < minBoxHeight) {
+          continue;
+        }
+
+        if (boxWidth <= 0 || boxHeight <= 0) {
+          continue;
+        }
+
+        final box = Rect.fromLTRB(
+          clampedLeft,
+          clampedTop,
+          clampedRight,
+          clampedBottom,
+        );
+
+        detections.add({'box': box, 'objectness': confidence});
       }
 
-      // Sort by objectness
+      // Sort by objectness (highest confidence first)
       detections.sort(
         (a, b) =>
             (b['objectness'] as double).compareTo(a['objectness'] as double),
       );
 
-      // Apply NMS
+      // Apply NMS to reduce overlapping boxes from YOLO26
       final nmsResults = <Map<String, dynamic>>[];
       while (detections.isNotEmpty) {
         final detection = detections.removeAt(0);
         nmsResults.add(detection);
+
+        final detectionBox = detection['box'] as Rect;
+        final detectionArea = detectionBox.width * detectionBox.height;
+
         detections.removeWhere((other) {
-          final intersection = (detection['box'] as Rect).intersect(
-            other['box'] as Rect,
-          );
+          final otherBox = other['box'] as Rect;
+          final otherArea = otherBox.width * otherBox.height;
+
+          final intersection = detectionBox.intersect(otherBox);
           final intersectionArea = intersection.width * intersection.height;
-          final otherArea =
-              (other['box'] as Rect).width * (other['box'] as Rect).height;
-          final iou = intersectionArea / otherArea;
+          final unionArea = detectionArea + otherArea - intersectionArea;
+          final iou = unionArea > 0 ? intersectionArea / unionArea : 0.0;
+
+          // Use configurable NMS threshold (now moderate, not ultra-high)
           return iou > _currentNmsThreshold;
         });
       }
 
+      // Limit how many boxes go to classification to avoid many overlapping crops
+      const maxDetectionsForClassification = 10;
+      final limitedNmsResults =
+          nmsResults.length > maxDetectionsForClassification
+              ? nmsResults.sublist(0, maxDetectionsForClassification)
+              : nmsResults;
+
       print('📊 YOLO Detection Summary:');
       print('   - Valid detections (above threshold): ${nmsResults.length}');
+      print(
+        '   - Detections sent to classification (capped): ${limitedNmsResults.length}',
+      );
       // Log YOLO objectness scores
-      for (var i = 0; i < nmsResults.length; i++) {
-        final objectness = nmsResults[i]['objectness'] as double;
+      for (var i = 0; i < limitedNmsResults.length; i++) {
+        final objectness = limitedNmsResults[i]['objectness'] as double;
         print(
           '   - Detection ${i + 1}: YOLO objectness = ${(objectness * 100).toStringAsFixed(2)}%',
         );
@@ -426,7 +507,7 @@ class TFLiteDetector {
       // Stage 2: Classify each detected box with MobileNetV3
       final results = <DetectionResult>[];
 
-      for (var detection in nmsResults) {
+      for (var detection in limitedNmsResults) {
         final box = detection['box'] as Rect;
         final yoloObjectness = detection['objectness'] as double;
 

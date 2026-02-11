@@ -64,7 +64,7 @@ flutter:
 
   assets:
     - assets/labelsv2.txt
-    - assets/classification_model.tflite
+    - assets/v2trash.tflite
     - assets/yolo1class.txt
     - assets/extension_model.onnx
     - assets/logo.png
