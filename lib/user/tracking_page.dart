@@ -1391,6 +1391,58 @@ class _TrackingPageState extends State<TrackingPage> {
     final sourceColor = TrackingModels.getSourceColor(session['source']);
     final expertReview = session['expertReview'] as Map<String, dynamic>?;
     final expertName = session['expertName'] as String?;
+    // Build overall detected labels for this report (no per-image percentages)
+    final Set<String> overallDetected = <String>{};
+    final List<dynamic> diseaseSummary =
+        (session['diseaseSummary'] as List?) ?? [];
+    const validDiseases = {
+      'anthracnose',
+      'bacterial blackspot',
+      'bacterial_blackspot',
+      'backterial_blackspot',
+      'powdery mildew',
+      'powdery_mildew',
+      'dieback',
+    };
+    bool _isNonMango(String normalized) =>
+        normalized == 'banana' ||
+        normalized == 'eggplant' ||
+        normalized == 'moringa';
+    bool _isExcluded(String normalized) =>
+        normalized == 'tip burn' ||
+        normalized == 'tip_burn' ||
+        normalized == 'unknown';
+    void _addIfRelevant(String raw) {
+      final normalized = raw.toLowerCase().replaceAll('_', ' ').trim();
+      final isHealthy = normalized == 'healthy';
+      final isValidDisease =
+          validDiseases.contains(normalized) ||
+          validDiseases.contains(raw.toLowerCase());
+      if (_isNonMango(normalized) || _isExcluded(normalized)) return;
+      if (isValidDisease || isHealthy) {
+        overallDetected.add(TrackingModels.formatLabel(raw));
+      }
+    }
+
+    if (diseaseSummary.isNotEmpty) {
+      for (final e in diseaseSummary) {
+        if (e is Map) {
+          final raw =
+              (e['disease'] ?? e['label'] ?? e['name'] ?? '').toString();
+          if (raw.isNotEmpty) _addIfRelevant(raw);
+        }
+      }
+    } else {
+      for (final img in images) {
+        if (img is Map && img['results'] is List) {
+          for (final r in (img['results'] as List)) {
+            if (r is Map && r['disease'] != null) {
+              _addIfRelevant(r['disease'].toString());
+            }
+          }
+        }
+      }
+    }
 
     showDialog(
       context: context,
@@ -1546,6 +1598,69 @@ class _TrackingPageState extends State<TrackingPage> {
                               ),
                             ),
                           const Divider(height: 24),
+                          // Overall Results (single summary for the report)
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.06),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Colors.blue.withOpacity(0.18),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.fact_check,
+                                      color: Colors.blue[700],
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      tr('overall_results'),
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue[800],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  overallDetected.isEmpty
+                                      ? tr('no_detections')
+                                      : overallDetected.join(', '),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[800],
+                                  ),
+                                ),
+                                // Expert validation (if available on this session)
+                                if (expertReview != null &&
+                                    expertReview['healthStatus'] != null) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '${tr('health_status')}: ${expertReview['healthStatus'] == 'healthy' ? tr('healthy') : tr('not_healthy')}',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color:
+                                          expertReview['healthStatus'] ==
+                                                  'healthy'
+                                              ? Colors.green[700]
+                                              : Colors.orange[800],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                           for (int idx = 0; idx < images.length; idx++) ...[
                             Card(
                               margin: const EdgeInsets.symmetric(vertical: 8),
@@ -1554,6 +1669,14 @@ class _TrackingPageState extends State<TrackingPage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    Text(
+                                      '${tr('images')} ${idx + 1}',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
                                     SizedBox(
                                       width: 320,
                                       height: 180,
@@ -1703,35 +1826,6 @@ class _TrackingPageState extends State<TrackingPage> {
                                         ],
                                       ),
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      tr('results'),
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    ...((images[idx]['results'] as List?) ?? [])
-                                        .map((res) {
-                                          final disease =
-                                              res['disease'] ?? 'Unknown';
-                                          final confidence = res['confidence'];
-                                          return Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 2,
-                                            ),
-                                            child: Text(
-                                              confidence != null
-                                                  ? '${TrackingModels.formatLabel(disease)} (${(confidence * 100).toStringAsFixed(1)}%)'
-                                                  : TrackingModels.formatLabel(
-                                                    disease,
-                                                  ),
-                                              style: const TextStyle(
-                                                fontSize: 15,
-                                              ),
-                                            ),
-                                          );
-                                        })
-                                        .toList(),
                                   ],
                                 ),
                               ),

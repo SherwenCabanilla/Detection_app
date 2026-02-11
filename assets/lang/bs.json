@@ -283,5 +283,22 @@
   "diseased": "Adunay Sakit",
   "total": "Kinatibuk-an",
   "health_status": "Kahimtang sa Kahimsog",
-  "not_healthy": "Dili Himsog"
+  "not_healthy": "Dili Himsog",
+  "overall_results": "Kinatibuk-ang Resulta"
+  ,
+  "treat_anthracnose_1": "Gamita ug copper-based nga fungicide sama sa copper oxychloride o Mancozeb sa panahon nga basa ug humid aron mapugngan ang pagturok sa spores.",
+  "treat_anthracnose_2": "Mag-prune kanunay aron maayong mosulod ang hangin ug moubos ang humidity sa palibot sa mga dahon.",
+  "treat_anthracnose_3": "Kuhaa ug sunuga ang mga nataptan nga dahon aron maminusan ang balik-balik nga impeksiyon.",
+  "treat_powdery_mildew_1": "Gamita ug sulfur-based o systemic fungicide sama sa tebuconazole sa unang timailhan sa sakit ug balika kada 10–14 ka adlaw.",
+  "treat_powdery_mildew_2": "Likayi ang overhead irrigation kay makapataas sa humidity ug makapaspas sa pagkaylap sa spores sa dahon.",
+  "treat_powdery_mildew_3": "Kuhaa ang grabe kaayo nga nataptan nga dahon aron maminusan ang fungal load.",
+  "treat_dieback_1": "Putla ang apektadong sanga labing menos 10 cm ubos sa katapusang timailhan aron mapugngan ang pag-uswag sa pathogen.",
+  "treat_dieback_2": "Ibutang ug systemic fungicide sama sa carbendazim aron mapanalipdan ang mga healthy nga dahon sa palibot.",
+  "treat_dieback_3": "Palig-ona ang tanom pinaagi sa husto nga abono ug irigasyon aron makasukol sa impeksiyon.",
+  "treat_bacterial_blackspot_1": "Kuhaa ang nataptan nga dahon ug bunga ug ilabay sa hustong paagi aron maminusan ang pagkaylap.",
+  "treat_bacterial_blackspot_2": "Gamita ang copper-based nga bactericide/fungicide labi na sa ting-uwan aron makatabang sa pagpugong sa impeksiyon.",
+  "treat_bacterial_blackspot_3": "Ipaayo ang kalimpyo sa uma ug airflow pinaagi sa pruning ug husto nga gilay-on sa tanom.",
+  "treat_healthy_1": "Padayon ug regular nga pagsubay aron sayo makita ang posibleng problema.",
+  "treat_healthy_2": "Padayon ang husto nga irigasyon ug pag-abono.",
+  "treat_healthy_3": "Buhata ang maayong sanitasyon sa uma."
 }

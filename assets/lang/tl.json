@@ -284,5 +284,22 @@
   "diseased": "May Sakit",
   "total": "Kabuuan",
   "health_status": "Katayuan ng Kalusugan",
-  "not_healthy": "Hindi Malusog"
+  "not_healthy": "Hindi Malusog",
+  "overall_results": "Kabuuang Resulta"
+  ,
+  "treat_anthracnose_1": "Maglagay ng copper-based na fungicide tulad ng copper oxychloride o Mancozeb kapag basa at mahalumigmig upang maiwasan ang pag-usbong ng spores.",
+  "treat_anthracnose_2": "Magputol (prune) ng mga sanga nang regular upang mapabuti ang daloy ng hangin at mabawasan ang halumigmig sa paligid ng mga dahon.",
+  "treat_anthracnose_3": "Alisin at sunugin ang mga infected na dahon upang mabawasan ang paulit-ulit na impeksiyon.",
+  "treat_powdery_mildew_1": "Gumamit ng sulfur-based o systemic fungicide tulad ng tebuconazole sa unang palatandaan ng impeksiyon at ulitin kada 10–14 araw.",
+  "treat_powdery_mildew_2": "Iwasan ang overhead irrigation dahil nagpapataas ito ng halumigmig at pagkalat ng spores sa dahon.",
+  "treat_powdery_mildew_3": "Tanggalin ang mga malubhang infected na dahon upang mabawasan ang fungal load.",
+  "treat_dieback_1": "Putulin ang apektadong sanga nang hindi bababa sa 10 cm sa ibaba ng huling sintomas upang mapigilan ang pagkalat ng pathogen.",
+  "treat_dieback_2": "Maglagay ng systemic fungicide tulad ng carbendazim upang maprotektahan ang mga malulusog na dahon sa paligid.",
+  "treat_dieback_3": "Panatilihing malakas ang halaman sa pamamagitan ng tamang pataba at patubig upang makaiwas sa impeksiyon.",
+  "treat_bacterial_blackspot_1": "Alisin ang mga infected na dahon at bunga at itapon nang maayos upang mabawasan ang pagkalat.",
+  "treat_bacterial_blackspot_2": "Gumamit ng copper-based na bactericide/fungicide lalo na sa tag-ulan upang makatulong sa pagsugpo ng impeksiyon.",
+  "treat_bacterial_blackspot_3": "Panatilihin ang kalinisan ng taniman at ayusin ang airflow sa pamamagitan ng pruning at tamang pagitan ng pagtatanim.",
+  "treat_healthy_1": "Ipagpatuloy ang regular na pagmamasid upang maagap na makita ang anumang problema.",
+  "treat_healthy_2": "Panatilihin ang tamang patubig at paglalagay ng pataba.",
+  "treat_healthy_3": "Isagawa ang maayos na sanitasyon sa taniman."
 }

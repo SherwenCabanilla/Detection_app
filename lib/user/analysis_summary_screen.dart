@@ -13,6 +13,7 @@ import 'package:image/image.dart' as img;
 import 'tflite_detector.dart';
 import 'detection_painter.dart';
 import 'disease_details_page.dart';
+import 'disease_treatments_i18n.dart';
 // import 'detection_carousel_screen.dart';
 // import 'detection_result_card.dart';
 // import 'tracking_page.dart';
@@ -894,7 +895,9 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
           scientificName: info?['scientificName'] ?? '',
           confirmedBy: info?['confirmedBy'] ?? 'Office of Carmen',
           details: {
-            'Treatments': (info?['treatments'] as List?)?.cast<String>() ?? [],
+            'Treatments':
+                getLocalizedTreatments(context, diseaseKey) ??
+                ((info?['treatments'] as List?)?.cast<String>() ?? []),
           },
         ),
       ),
@@ -1330,7 +1333,9 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          ...(info['treatments'] as List<String>).map<Widget>(
+                          ...((getLocalizedTreatments(context, disease) ??
+                                  (info['treatments'] as List<String>)))
+                              .map<Widget>(
                             (t) => Padding(
                               padding: const EdgeInsets.only(bottom: 8),
                               child: Text(
@@ -1711,7 +1716,9 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          ...(info['treatments'] as List<String>).map<Widget>(
+                          ...((getLocalizedTreatments(context, disease) ??
+                                  (info['treatments'] as List<String>)))
+                              .map<Widget>(
                             (t) => Padding(
                               padding: const EdgeInsets.only(bottom: 6),
                               child: Row(

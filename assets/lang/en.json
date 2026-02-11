@@ -280,5 +280,22 @@
   "diseased": "Diseased",
   "total": "Total",
   "health_status": "Health Status",
-  "not_healthy": "Not Healthy"
+  "not_healthy": "Not Healthy",
+  "overall_results": "Overall Results"
+  ,
+  "treat_anthracnose_1": "Apply copper-based fungicides like copper oxychloride or Mancozeb during wet and humid conditions to prevent spore germination.",
+  "treat_anthracnose_2": "Prune mango trees regularly to improve air circulation and reduce humidity around foliage.",
+  "treat_anthracnose_3": "Remove and burn infected leaves to limit reinfection cycles.",
+  "treat_powdery_mildew_1": "Use sulfur-based or systemic fungicides like tebuconazole at the first sign of infection and repeat at 10–14-day intervals.",
+  "treat_powdery_mildew_2": "Avoid overhead irrigation which increases humidity and spore spread on leaf surfaces.",
+  "treat_powdery_mildew_3": "Remove heavily infected leaves to reduce fungal load.",
+  "treat_dieback_1": "Prune affected twigs at least 10 cm below the last symptom to halt pathogen progression.",
+  "treat_dieback_2": "Apply systemic fungicides such as carbendazim to protect surrounding healthy leaves.",
+  "treat_dieback_3": "Maintain plant vigor through balanced nutrition and irrigation to resist infection.",
+  "treat_bacterial_blackspot_1": "Remove infected leaves and fruits, and dispose of them properly to reduce spread.",
+  "treat_bacterial_blackspot_2": "Apply copper-based bactericides/fungicides during rainy periods to help suppress infection.",
+  "treat_bacterial_blackspot_3": "Improve orchard sanitation and airflow through pruning and proper spacing.",
+  "treat_healthy_1": "Continue regular monitoring for early detection of problems.",
+  "treat_healthy_2": "Maintain proper irrigation and fertilization.",
+  "treat_healthy_3": "Practice good orchard sanitation."
 }

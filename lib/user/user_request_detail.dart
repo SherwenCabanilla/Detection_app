@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'tflite_detector.dart';
 import 'detection_painter.dart';
 import 'disease_details_page.dart';
+import 'disease_treatments_i18n.dart';
 
 class UserRequestDetail extends StatefulWidget {
   final Map<String, dynamic> request;
@@ -109,181 +110,121 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
             final imagePath =
                 (img['path'] ?? img['imagePath'] ?? '').toString();
             final displayPath = imageUrl.isNotEmpty ? imageUrl : imagePath;
+            final detections =
+                (img['results'] as List?)
+                    ?.where(
+                      (d) =>
+                          d is Map &&
+                          d['disease'] != null &&
+                          d['confidence'] != null &&
+                          d['boundingBox'] != null,
+                    )
+                    .cast<Map>()
+                    .toList() ??
+                [];
 
             return Dialog(
               backgroundColor: Colors.black,
               insetPadding: const EdgeInsets.all(12),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  return Stack(
-                    children: [
-                      // InteractiveViewer for pinch-to-zoom (bounding boxes disabled in fullscreen)
-                      Positioned.fill(
-                        child: InteractiveViewer(
-                          key: ValueKey(currentIndex), // Force rebuild on image change
-                          minScale: 0.5,
-                          maxScale: 5.0,
-                          panEnabled: true,
-                          scaleEnabled: true,
-                          boundaryMargin: const EdgeInsets.all(double.infinity),
-                          child: Center(
-                            child: _buildImageWidget(
-                              displayPath,
-                              fit: BoxFit.contain,
+                  final widgetW = constraints.maxWidth;
+                  final widgetH = constraints.maxHeight;
+
+                  // Prefer stored dimensions if available (faster / avoids network decode)
+                  final storedImageWidth = img['imageWidth'] as num?;
+                  final storedImageHeight = img['imageHeight'] as num?;
+
+                  Widget buildZoomLayer(Size originalSize) {
+                    // BoxFit.cover math (consistent fullscreen look)
+                    final scaleX = widgetW / originalSize.width;
+                    final scaleY = widgetH / originalSize.height;
+                    final scale = scaleX > scaleY ? scaleX : scaleY;
+                    final scaledW = originalSize.width * scale;
+                    final scaledH = originalSize.height * scale;
+                    final dx = (widgetW - scaledW) / 2;
+                    final dy = (widgetH - scaledH) / 2;
+
+                    return InteractiveViewer(
+                      key: ValueKey(currentIndex),
+                      minScale: 0.5,
+                      maxScale: 5.0,
+                      panEnabled: true,
+                      scaleEnabled: true,
+                      boundaryMargin: const EdgeInsets.all(double.infinity),
+                      child: SizedBox(
+                        width: widgetW,
+                        height: widgetH,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: _buildImageWidget(
+                                displayPath,
+                                fit: BoxFit.cover,
+                              ),
                             ),
-                          ),
-                        ),
-                      ),
-                      // Don't show bounding boxes in fullscreen viewer to allow smooth zooming
-                      /*if (_showBoundingBoxes && detections.isNotEmpty)
-                        IgnorePointer(
-                          child: Builder(
-                            builder: (context) {
-                              final storedImageWidth = img['imageWidth'] as num?;
-                              final storedImageHeight =
-                                  img['imageHeight'] as num?;
-
-                              if (storedImageWidth != null &&
-                                  storedImageHeight != null) {
-                                final imgSize = Size(
-                                  storedImageWidth.toDouble(),
-                                  storedImageHeight.toDouble(),
-                                );
-                                final imgW = imgSize.width;
-                                final imgH = imgSize.height;
-                                final widgetAspect = widgetW / widgetH;
-                                final imageAspect = imgW / imgH;
-                                double displayW, displayH, dx = 0, dy = 0;
-                                if (widgetAspect > imageAspect) {
-                                  displayH = widgetH;
-                                  displayW = widgetH * imageAspect;
-                                  dx = (widgetW - displayW) / 2;
-                                } else {
-                                  displayW = widgetW;
-                                  displayH = widgetW / imageAspect;
-                                  dy = (widgetH - displayH) / 2;
-                                }
-
-                                return CustomPaint(
-                                painter: DetectionPainter(
-                                  results:
-                                      detections
-                                          .where(
-                                            (d) => d['boundingBox'] != null,
-                                          )
-                                          .map((d) {
-                                            final left =
-                                                (d['boundingBox']['left']
-                                                        as num)
-                                                    .toDouble();
-                                            final top =
-                                                (d['boundingBox']['top'] as num)
-                                                    .toDouble();
-                                            final right =
-                                                (d['boundingBox']['right']
-                                                        as num)
-                                                    .toDouble();
-                                            final bottom =
-                                                (d['boundingBox']['bottom']
-                                                        as num)
-                                                    .toDouble();
-                                            return DetectionResult(
-                                              label: d['disease'],
-                                              confidence: d['confidence'],
-                                              boundingBox: Rect.fromLTRB(
-                                                left,
-                                                top,
-                                                right,
-                                                bottom,
-                                              ),
-                                            );
-                                          })
-                                          .toList(),
-                                  originalImageSize: imgSize,
-                                  displayedImageSize: Size(displayW, displayH),
-                                  displayedImageOffset: Offset(dx, dy),
-                                ),
-                                size: Size(widgetW, widgetH),
-                              );
-                            } else {
-                              return FutureBuilder<Size>(
-                                future: _getImageSize(
-                                  displayPath.startsWith('http') &&
-                                          displayPath.isNotEmpty
-                                      ? NetworkImage(displayPath)
-                                      : FileImage(File(displayPath)),
-                                ),
-                                builder: (context, snapshot) {
-                                  if (!snapshot.hasData) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  final imgSize = snapshot.data!;
-                                  final imgW = imgSize.width;
-                                  final imgH = imgSize.height;
-                                  final widgetAspect = widgetW / widgetH;
-                                  final imageAspect = imgW / imgH;
-                                  double displayW, displayH, dx = 0, dy = 0;
-                                  if (widgetAspect > imageAspect) {
-                                    displayH = widgetH;
-                                    displayW = widgetH * imageAspect;
-                                    dx = (widgetW - displayW) / 2;
-                                  } else {
-                                    displayW = widgetW;
-                                    displayH = widgetW / imageAspect;
-                                    dy = (widgetH - displayH) / 2;
-                                  }
-
-                                  return CustomPaint(
-                                    painter: DetectionPainter(
-                                      results:
-                                          detections
-                                              .where(
-                                                (d) => d['boundingBox'] != null,
-                                              )
-                                              .map((d) {
-                                                final left =
-                                                    (d['boundingBox']['left']
-                                                            as num)
-                                                        .toDouble();
-                                                final top =
-                                                    (d['boundingBox']['top']
-                                                            as num)
-                                                        .toDouble();
-                                                final right =
-                                                    (d['boundingBox']['right']
-                                                            as num)
-                                                        .toDouble();
-                                                final bottom =
-                                                    (d['boundingBox']['bottom']
-                                                            as num)
-                                                        .toDouble();
-                                                return DetectionResult(
-                                                  label: d['disease'],
-                                                  confidence: d['confidence'],
-                                                  boundingBox: Rect.fromLTRB(
-                                                    left,
-                                                    top,
-                                                    right,
-                                                    bottom,
-                                                  ),
-                                                );
-                                              })
-                                              .toList(),
-                                      originalImageSize: imgSize,
-                                      displayedImageSize: Size(
-                                        displayW,
-                                        displayH,
-                                      ),
+                            if (_showBoundingBoxes && detections.isNotEmpty)
+                              Positioned.fill(
+                                child: CustomPaint(
+                                  painter: DetectionPainter(
+                                    results:
+                                        detections.map((d) {
+                                          final bb = d['boundingBox'] as Map;
+                                          return DetectionResult(
+                                            label: d['disease'],
+                                            confidence: d['confidence'],
+                                            boundingBox: Rect.fromLTRB(
+                                              (bb['left'] as num).toDouble(),
+                                              (bb['top'] as num).toDouble(),
+                                              (bb['right'] as num).toDouble(),
+                                              (bb['bottom'] as num).toDouble(),
+                                            ),
+                                          );
+                                        }).toList(),
+                                    originalImageSize: originalSize,
+                                    displayedImageSize: Size(scaledW, scaledH),
                                     displayedImageOffset: Offset(dx, dy),
+                                    debugMode: false,
                                   ),
                                   size: Size(widgetW, widgetH),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  final zoomLayer =
+                      (storedImageWidth != null && storedImageHeight != null)
+                          ? buildZoomLayer(
+                            Size(
+                              storedImageWidth.toDouble(),
+                              storedImageHeight.toDouble(),
+                            ),
+                          )
+                          : FutureBuilder<Size>(
+                            future: _getImageSize(
+                              displayPath.startsWith('http') &&
+                                      displayPath.isNotEmpty
+                                  ? NetworkImage(displayPath)
+                                  : FileImage(File(displayPath)),
+                            ),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData) {
+                                return const Center(
+                                  child: CircularProgressIndicator(),
                                 );
-                              },
-                            );
-                          }
-                        },
-                          ),
-                        ),*/
+                              }
+                              return buildZoomLayer(snapshot.data!);
+                            },
+                          );
+
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: zoomLayer,
+                      ),
                       Positioned(
                         top: 8,
                         right: 8,
@@ -2087,7 +2028,8 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
               confirmedBy: info?['confirmedBy'] ?? 'Office of Carmen',
               details: {
                 'Treatments':
-                    (info?['treatments'] as List?)?.cast<String>() ?? [],
+                    getLocalizedTreatments(context, diseaseKey) ??
+                    ((info?['treatments'] as List?)?.cast<String>() ?? []),
               },
             ),
       ),
@@ -2445,7 +2387,11 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
                                     ),
                                   ),
                                   const SizedBox(height: 8),
-                                  ...(info['treatments'] as List<String>)
+                                  ...((getLocalizedTreatments(
+                                                context,
+                                                diseaseName,
+                                              ) ??
+                                          (info['treatments'] as List<String>)))
                                       .map<Widget>(
                                         (t) => Padding(
                                           padding: const EdgeInsets.only(

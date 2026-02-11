@@ -19,6 +19,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:lottie/lottie.dart';
 import 'dart:async';
 import 'tracking_page.dart';
+import 'disease_treatments_i18n.dart';
 import 'tracking_models.dart';
 
 class HomePage extends StatefulWidget {
@@ -766,7 +767,9 @@ class _HomePageState extends State<HomePage> {
               scientificName: _diseaseInfo[name]?['scientificName'] ?? '',
               confirmedBy: _diseaseInfo[name]?['confirmedBy'] ?? 'Office of Carmen',
               details: {
-                'Treatments': _diseaseInfo[name]?['treatments'] ?? [],
+                'Treatments':
+                    getLocalizedTreatments(context, name) ??
+                    (_diseaseInfo[name]?['treatments'] ?? []),
               },
             ),
       ),
