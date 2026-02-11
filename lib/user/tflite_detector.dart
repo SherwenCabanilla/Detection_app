@@ -1,7 +1,8 @@
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
-import 'dart:math';
+import 'dart:math' as math;
 import 'package:tflite_flutter/tflite_flutter.dart';
+import 'package:onnxruntime_v2/onnxruntime_v2.dart' as ort;
 import 'dart:io';
 import 'dart:ui' show Rect;
 import 'package:flutter/services.dart';
@@ -19,17 +20,31 @@ class DetectionResult {
 }
 
 class TFLiteDetector {
-  Interpreter? _interpreter;
-  List<String> _labels = [];
-  static const double confidenceThreshold =
-      0.75; // Set to 50% confidence threshold
-  static const double nmsThreshold =
-      0.3; // Increased from 0.1 to 0.3 to allow more detections
-  static const int inputSize = 640;
+  // YOLO model for box detection (1 class: mango_leaf)
+  Interpreter? _yoloInterpreter;
 
-  // Configurable thresholds for testing
+  // MobileNetV3 ONNX model for classification (9 classes)
+  ort.OrtSession? _mobilenetSession;
+
+  // Classification labels (9 classes)
+  List<String> _classificationLabels = [];
+
+  static const double confidenceThreshold =
+      0.20; // Objectness threshold for YOLO
+  static const double nmsThreshold = 0.3;
+  static const double mobilenetConfidenceThreshold =
+      0.75; // Minimum confidence threshold for MobileNet classification
+  static const int yoloInputSize = 640;
+  static const int mobilenetInputSize = 224; // MobileNetV3 input size
+  static const double defaultTemperature =
+      1.0; // Default temperature for softmax (1.0 = no scaling, higher = less overconfident)
+
+  // Configurable thresholds
   double _currentConfidenceThreshold = confidenceThreshold;
   double _currentNmsThreshold = nmsThreshold;
+  double _currentMobilenetConfidenceThreshold = mobilenetConfidenceThreshold;
+  double _currentTemperature =
+      defaultTemperature; // Temperature for softmax scaling
 
   img.Image letterbox(img.Image src, int targetW, int targetH) {
     final srcW = src.width;
@@ -49,23 +64,241 @@ class TFLiteDetector {
 
   Future<void> loadModel() async {
     try {
+      // Initialize ONNX Runtime environment
+      ort.OrtEnv.instance.init();
+
+      // Load classification labels (9 classes)
       final labelData = await rootBundle.loadString('assets/labelsv2.txt');
-      _labels =
+      _classificationLabels =
           labelData
               .split('\n')
               .map((e) => e.trim())
               .where((e) => e.isNotEmpty)
               .toList();
-      _interpreter = await Interpreter.fromAsset('assets/v43.tflite');
-      print('✅ Model loaded with ${_labels.length} labels');
+
+      // Load YOLO model (1 class detection)
+      _yoloInterpreter = await Interpreter.fromAsset(
+        'assets/classification_model.tflite',
+      );
+
+      // Load MobileNetV3 ONNX model (9 class classification)
+      final onnxBytes = await rootBundle.load('assets/extension_model.onnx');
+      final sessionOptions = ort.OrtSessionOptions();
+      sessionOptions.appendCPUProvider(ort.CPUFlags.useArena);
+      _mobilenetSession = ort.OrtSession.fromBuffer(
+        onnxBytes.buffer.asUint8List(),
+        sessionOptions,
+      );
+
+      // Print ONNX model info for debugging
+      print('📊 ONNX Model loaded successfully');
+
+      print('✅ YOLO model loaded (1 class detection)');
+      print('✅ MobileNetV3 ONNX model loaded');
+      print(
+        '✅ Classification labels loaded: ${_classificationLabels.length} (${_classificationLabels.join(", ")})',
+      );
     } catch (e) {
-      print('❌ Failed to load model: $e');
+      print('❌ Failed to load models: $e');
       rethrow;
     }
   }
 
+  // Crop and resize image region for MobileNetV3
+  Float32List _prepareCropForMobileNet(img.Image originalImage, Rect box) {
+    // Ensure box is within image bounds
+    final left = math.max(0, box.left.toInt());
+    final top = math.max(0, box.top.toInt());
+    final right = math.min(originalImage.width, box.right.toInt());
+    final bottom = math.min(originalImage.height, box.bottom.toInt());
+
+    final width = right - left;
+    final height = bottom - top;
+
+    if (width <= 0 || height <= 0) {
+      throw Exception('Invalid crop dimensions');
+    }
+
+    // Crop the region (copyCrop takes: src, x, y, width, height)
+    final cropped = img.copyCrop(originalImage, left, top, width, height);
+
+    // Resize to MobileNetV3 input size (224x224)
+    final resized = img.copyResize(
+      cropped,
+      width: mobilenetInputSize,
+      height: mobilenetInputSize,
+    );
+
+    // Convert to Float32List in NCHW format (channels first) with ImageNet normalization
+    // Format: [R values..., G values..., B values...]
+    // ImageNet normalization: (pixel/255.0 - mean) / std
+    // mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+    final input = Float32List(mobilenetInputSize * mobilenetInputSize * 3);
+    final pixels = resized.getBytes();
+
+    final size = mobilenetInputSize * mobilenetInputSize;
+
+    // ImageNet normalization constants
+    const meanR = 0.485;
+    const meanG = 0.456;
+    const meanB = 0.406;
+    const stdR = 0.229;
+    const stdG = 0.224;
+    const stdB = 0.225;
+
+    // Extract R, G, B channels separately for NCHW format with ImageNet normalization
+    for (int y = 0; y < mobilenetInputSize; y++) {
+      for (int x = 0; x < mobilenetInputSize; x++) {
+        final pixelIndex = (y * mobilenetInputSize + x) * 4;
+
+        // Normalize to [0,1] then apply ImageNet normalization
+        final r = (pixels[pixelIndex] / 255.0 - meanR) / stdR;
+        final g = (pixels[pixelIndex + 1] / 255.0 - meanG) / stdG;
+        final b = (pixels[pixelIndex + 2] / 255.0 - meanB) / stdB;
+
+        // NCHW format: all R values first, then all G, then all B
+        final idx = y * mobilenetInputSize + x;
+        input[idx] = r; // R channel
+        input[idx + size] = g; // G channel
+        input[idx + size * 2] = b; // B channel
+      }
+    }
+
+    return input;
+  }
+
+  // Classify a cropped region using MobileNetV3
+  Future<Map<String, dynamic>> _classifyWithMobileNet(
+    img.Image originalImage,
+    Rect box,
+  ) async {
+    ort.OrtValueTensor? inputTensor;
+    ort.OrtRunOptions? runOptions;
+    List<ort.OrtValue?>? outputs;
+
+    try {
+      // 1️⃣ Prepare input (Float32List)
+      final Float32List inputData = _prepareCropForMobileNet(
+        originalImage,
+        box,
+      );
+
+      // 2️⃣ Create tensor using TYPED DATA (THIS IS THE FIX)
+      inputTensor = ort.OrtValueTensor.createTensorWithDataList(
+        inputData,
+        [1, 3, mobilenetInputSize, mobilenetInputSize], // NCHW
+      );
+
+      // 3️⃣ Run inference
+      runOptions = ort.OrtRunOptions();
+      outputs = await _mobilenetSession!.runAsync(runOptions, {
+        'input': inputTensor,
+      });
+
+      if (outputs == null || outputs.isEmpty) {
+        return {'label': 'Unknown', 'confidence': 0.0};
+      }
+
+      // 4️⃣ Extract logits
+      final ort.OrtValueTensor outputTensor =
+          outputs.first as ort.OrtValueTensor;
+
+      // Handle nested list structure (output shape is [1, 9] for batch_size=1, num_classes=9)
+      final dynamic outputValue = outputTensor.value;
+      List<double> logits;
+
+      if (outputValue is List) {
+        // Check if it's nested (e.g., [[...]])
+        if (outputValue.isNotEmpty && outputValue.first is List) {
+          // Flatten nested structure: take first batch element
+          logits =
+              (outputValue.first as List)
+                  .map<double>((e) => e.toDouble())
+                  .toList();
+        } else {
+          // Already flat list
+          logits = outputValue.map<double>((e) => e.toDouble()).toList();
+        }
+      } else {
+        throw Exception(
+          'Unexpected output tensor value type: ${outputValue.runtimeType}',
+        );
+      }
+
+      // 5️⃣ Softmax with optional temperature scaling
+      // Temperature = 1.0 means no scaling (use raw softmax) - best for training data
+      // Temperature > 1 makes distribution softer (less overconfident) - use for overfitted models
+      final maxLogit = logits.reduce(math.max);
+
+      // Calculate raw softmax (temperature = 1.0) for comparison
+      final rawScaledLogits = logits.map((e) => (e - maxLogit) / 1.0).toList();
+      final rawExpVals = rawScaledLogits.map((e) => math.exp(e)).toList();
+      final rawSumExp = rawExpVals.reduce((a, b) => a + b);
+      final rawProbs = rawExpVals.map((e) => e / rawSumExp).toList();
+
+      // Calculate temperature-scaled softmax
+      final scaledLogits =
+          logits.map((e) => (e - maxLogit) / _currentTemperature).toList();
+      final expVals = scaledLogits.map((e) => math.exp(e)).toList();
+      final sumExp = expVals.reduce((a, b) => a + b);
+      final probs = expVals.map((e) => e / sumExp).toList();
+
+      // 6️⃣ Argmax
+      int bestIdx = 0;
+      double bestConf = probs[0];
+      double rawBestConf = rawProbs[0];
+
+      for (int i = 1; i < probs.length; i++) {
+        if (probs[i] > bestConf) {
+          bestConf = probs[i];
+          bestIdx = i;
+        }
+        if (rawProbs[i] > rawBestConf) {
+          rawBestConf = rawProbs[i];
+        }
+      }
+
+      final label =
+          bestIdx < _classificationLabels.length
+              ? _classificationLabels[bestIdx]
+              : 'Unknown';
+
+      // Use temperature-scaled confidence (or raw if temperature = 1.0)
+      double adjustedConfidence = bestConf;
+
+      // Debug: Show raw confidence vs adjusted confidence
+      if (_currentTemperature != 1.0) {
+        print(
+          '📊 Confidence: Raw=${(rawBestConf * 100).toStringAsFixed(2)}%, Adjusted (T=${_currentTemperature})=${(adjustedConfidence * 100).toStringAsFixed(2)}%',
+        );
+      }
+
+      // Apply minimum confidence threshold (75%) using adjusted confidence
+      if (adjustedConfidence < _currentMobilenetConfidenceThreshold) {
+        print(
+          '⚠️  Classification confidence too low: $label (${(adjustedConfidence * 100).toStringAsFixed(2)}%) < ${(_currentMobilenetConfidenceThreshold * 100).toStringAsFixed(0)}%',
+        );
+        return {'label': 'Unknown', 'confidence': 0.0};
+      }
+
+      print(
+        '✅ Classification: $label (${(adjustedConfidence * 100).toStringAsFixed(2)}%)',
+      );
+
+      return {'label': label, 'confidence': adjustedConfidence};
+    } catch (e, s) {
+      print('❌ MobileNetV3 error: $e');
+      print(s);
+      return {'label': 'Unknown', 'confidence': 0.0};
+    } finally {
+      inputTensor?.release();
+      runOptions?.release();
+      outputs?.forEach((o) => o?.release());
+    }
+  }
+
   Future<List<DetectionResult>> detectDiseases(String imagePath) async {
-    if (_interpreter == null) {
+    if (_yoloInterpreter == null || _mobilenetSession == null) {
       await loadModel();
     }
 
@@ -73,8 +306,9 @@ class TFLiteDetector {
       final image = img.decodeImage(File(imagePath).readAsBytesSync());
       if (image == null) throw Exception('Image decoding failed');
 
-      final resized = letterbox(image, inputSize, inputSize);
-      final input = Float32List(inputSize * inputSize * 3);
+      // Stage 1: YOLO detects bounding boxes
+      final resized = letterbox(image, yoloInputSize, yoloInputSize);
+      final input = Float32List(yoloInputSize * yoloInputSize * 3);
       final pixels = resized.getBytes();
       for (
         int i = 0, j = 0;
@@ -86,70 +320,57 @@ class TFLiteDetector {
         input[j + 2] = pixels[i + 2] / 255.0;
       }
 
-      final inputShape = [1, inputSize, inputSize, 3];
-      final outputShape = [
-        1,
-        5 +
-            _labels
-                .length, // 4 bbox + 1 obj + N class scores (dynamic based on labels)
-        8400,
-      ];
+      // YOLO output shape: (1, 5, 8400)
+      // [x, y, w, h, objectness]
+      final inputShape = [1, yoloInputSize, yoloInputSize, 3];
+      final outputShape = [1, 5, 8400];
 
       final output = List.filled(
         outputShape.reduce((a, b) => a * b),
         0.0,
       ).reshape(outputShape);
 
-      _interpreter!.run(input.reshape(inputShape), output);
+      _yoloInterpreter!.run(input.reshape(inputShape), output);
 
-      final results = <DetectionResult>[];
-      final outputData = output[0];
+      final outputData = output[0]; // Shape: (5, 8400)
 
       print('🔍 Detection Debug Info:');
       print('   - Image size: ${image.width}x${image.height}');
-      print('   - Input size: ${inputSize}x${inputSize}');
-      print('   - Labels loaded: ${_labels.length} (${_labels.join(", ")})');
+      print('   - YOLO input size: ${yoloInputSize}x${yoloInputSize}');
+      print(
+        '   - MobileNetV3 input size: ${mobilenetInputSize}x${mobilenetInputSize}',
+      );
+      print('   - Classification labels: ${_classificationLabels.length}');
       print('   - Confidence threshold: $_currentConfidenceThreshold');
-      print('   - NMS threshold: $_currentNmsThreshold');
 
-      final detections = <DetectionResult>[];
-      int totalDetections = 0;
-      int validDetections = 0;
+      // Extract bounding boxes from YOLO output
+      final detections = <Map<String, dynamic>>[];
 
-      for (var i = 0; i < outputData[0].length; i++) {
-        totalDetections++;
-        var maxConf = 0.0;
-        var maxClass = 0;
+      // Calculate letterboxing parameters
+      final scale = math.min(
+        yoloInputSize / image.width,
+        yoloInputSize / image.height,
+      );
+      final newUnpaddedW = image.width * scale;
+      final newUnpaddedH = image.height * scale;
+      final padX = (yoloInputSize - newUnpaddedW) / 2;
+      final padY = (yoloInputSize - newUnpaddedH) / 2;
 
-        for (var c = 5; c < 5 + _labels.length; c++) {
-          final conf = outputData[c][i];
-          if (conf > maxConf) {
-            maxConf = conf;
-            maxClass = c - 5;
-          }
-        }
+      for (var i = 0; i < 8400; i++) {
+        // YOLO output format: [x, y, w, h, objectness]
+        final centerX = outputData[0][i]; // Normalized 0-1
+        final centerY = outputData[1][i]; // Normalized 0-1
+        final width = outputData[2][i]; // Normalized 0-1
+        final height = outputData[3][i]; // Normalized 0-1
+        final objectness = outputData[4][i]; // Objectness score
 
-        if (maxConf > _currentConfidenceThreshold) {
-          validDetections++;
-          // YOLO outputs normalized coordinates (0-1) for center point and dimensions
-          final centerX = outputData[0][i];
-          final centerY = outputData[1][i];
-          final width = outputData[2][i];
-          final height = outputData[3][i];
-
-          // Calculate letterboxing parameters - fixed logic
-          final scale = min(inputSize / image.width, inputSize / image.height);
-          final newUnpaddedW = image.width * scale;
-          final newUnpaddedH = image.height * scale;
-          final padX = (inputSize - newUnpaddedW) / 2;
-          final padY = (inputSize - newUnpaddedH) / 2;
-
+        // Filter by objectness threshold
+        if (objectness > _currentConfidenceThreshold) {
           // Convert from YOLO normalized coordinates to original image coordinates
-          // First convert center point and dimensions to absolute coordinates in YOLO space
-          final yoloCenterX = centerX * inputSize;
-          final yoloCenterY = centerY * inputSize;
-          final yoloWidth = width * inputSize;
-          final yoloHeight = height * inputSize;
+          final yoloCenterX = centerX * yoloInputSize;
+          final yoloCenterY = centerY * yoloInputSize;
+          final yoloWidth = width * yoloInputSize;
+          final yoloHeight = height * yoloInputSize;
 
           // Remove padding and scale back to original image space
           final originalCenterX = (yoloCenterX - padX) / scale;
@@ -163,51 +384,93 @@ class TFLiteDetector {
           final right = originalCenterX + (originalWidth / 2);
           final bottom = originalCenterY + (originalHeight / 2);
 
-          detections.add(
-            DetectionResult(
-              label: _getDiseaseLabel(maxClass),
-              confidence: maxConf,
-              boundingBox: Rect.fromLTRB(left, top, right, bottom),
-            ),
-          );
+          final box = Rect.fromLTRB(left, top, right, bottom);
+
+          detections.add({'box': box, 'objectness': objectness});
         }
       }
 
-      detections.sort((a, b) => b.confidence.compareTo(a.confidence));
+      // Sort by objectness
+      detections.sort(
+        (a, b) =>
+            (b['objectness'] as double).compareTo(a['objectness'] as double),
+      );
 
+      // Apply NMS
+      final nmsResults = <Map<String, dynamic>>[];
       while (detections.isNotEmpty) {
         final detection = detections.removeAt(0);
-        results.add(detection);
+        nmsResults.add(detection);
         detections.removeWhere((other) {
-          final intersection = detection.boundingBox.intersect(
-            other.boundingBox,
+          final intersection = (detection['box'] as Rect).intersect(
+            other['box'] as Rect,
           );
           final intersectionArea = intersection.width * intersection.height;
-          final otherArea = other.boundingBox.width * other.boundingBox.height;
+          final otherArea =
+              (other['box'] as Rect).width * (other['box'] as Rect).height;
           final iou = intersectionArea / otherArea;
           return iou > _currentNmsThreshold;
         });
       }
 
-      print('📊 Detection Summary:');
-      print('   - Total raw detections: $totalDetections');
-      print('   - Valid detections (above threshold): $validDetections');
-      print('   - Final detections after NMS: ${results.length}');
+      print('📊 YOLO Detection Summary:');
+      print('   - Valid detections (above threshold): ${nmsResults.length}');
+      // Log YOLO objectness scores
+      for (var i = 0; i < nmsResults.length; i++) {
+        final objectness = nmsResults[i]['objectness'] as double;
+        print(
+          '   - Detection ${i + 1}: YOLO objectness = ${(objectness * 100).toStringAsFixed(2)}%',
+        );
+      }
 
-      if (results.isNotEmpty) {
-        print('🎯 Detected objects:');
-        for (var result in results) {
+      // Stage 2: Classify each detected box with MobileNetV3
+      final results = <DetectionResult>[];
+
+      for (var detection in nmsResults) {
+        final box = detection['box'] as Rect;
+        final yoloObjectness = detection['objectness'] as double;
+
+        // Classify with MobileNetV3
+        final classification = await _classifyWithMobileNet(image, box);
+
+        final label = classification['label'] as String;
+        final classConfidence = classification['confidence'] as double;
+
+        // Skip if MobileNet confidence is below minimum threshold (returns 'Unknown' with 0.0)
+        // This hides boxes that don't meet the 75% confidence requirement
+        if (label == 'Unknown' || classConfidence == 0.0) {
           print(
-            '   - ${result.label}: ${(result.confidence * 100).toStringAsFixed(1)}% at ${result.boundingBox}',
+            '   - Skipped: YOLO=${(yoloObjectness * 100).toStringAsFixed(2)}%, MobileNet confidence below ${(_currentMobilenetConfidenceThreshold * 100).toStringAsFixed(0)}% threshold',
           );
+          continue; // Skip this detection, don't show the box
         }
-      } else {
+
+        // Combine objectness and classification confidence
+        // You can use just classConfidence or combine both
+        final combinedConfidence =
+            classConfidence; // Using MobileNetV3 confidence only
+
+        results.add(
+          DetectionResult(
+            label: label,
+            confidence: combinedConfidence,
+            boundingBox: box,
+          ),
+        );
+
+        print(
+          '   - ${label}: YOLO=${(yoloObjectness * 100).toStringAsFixed(2)}%, MobileNet=${(combinedConfidence * 100).toStringAsFixed(2)}% at $box',
+        );
+      }
+
+      print('📊 Final Results:');
+      print('   - Total detections: ${results.length}');
+
+      if (results.isEmpty) {
         print('⚠️  No objects detected! Consider:');
         print(
           '   - Lowering confidence threshold (currently $_currentConfidenceThreshold)',
         );
-        print('   - Checking if model is appropriate for your images');
-        print('   - Verifying image quality and lighting');
       }
 
       return results;
@@ -217,22 +480,30 @@ class TFLiteDetector {
     }
   }
 
-  String _getDiseaseLabel(int classId) {
-    if (classId >= 0 && classId < _labels.length) {
-      return _labels[classId];
-    }
-    return 'Unknown($classId)';
-  }
-
   // Method to adjust thresholds for better detection
-  void setThresholds({double? confidence, double? nms}) {
+  void setThresholds({
+    double? confidence,
+    double? nms,
+    double? mobilenetConfidence,
+    double? temperature,
+  }) {
     if (confidence != null) {
       _currentConfidenceThreshold = confidence;
-      print('🔧 Confidence threshold set to: $confidence');
+      print('🔧 YOLO confidence threshold set to: $confidence');
     }
     if (nms != null) {
       _currentNmsThreshold = nms;
       print('🔧 NMS threshold set to: $nms');
+    }
+    if (mobilenetConfidence != null) {
+      _currentMobilenetConfidenceThreshold = mobilenetConfidence;
+      print('🔧 MobileNet confidence threshold set to: $mobilenetConfidence');
+    }
+    if (temperature != null) {
+      _currentTemperature = temperature;
+      print(
+        '🔧 Temperature scaling set to: $temperature (1.0 = no scaling, higher = less confident)',
+      );
     }
   }
 
@@ -240,8 +511,10 @@ class TFLiteDetector {
   void resetThresholds() {
     _currentConfidenceThreshold = confidenceThreshold;
     _currentNmsThreshold = nmsThreshold;
+    _currentMobilenetConfidenceThreshold = mobilenetConfidenceThreshold;
+    _currentTemperature = defaultTemperature;
     print(
-      '🔄 Thresholds reset to defaults: confidence=$confidenceThreshold, nms=$nmsThreshold',
+      '🔄 Thresholds reset to defaults: YOLO=$confidenceThreshold, NMS=$nmsThreshold, MobileNet=$mobilenetConfidenceThreshold, Temperature=$defaultTemperature',
     );
   }
 
@@ -250,23 +523,54 @@ class TFLiteDetector {
     String imagePath, {
     double? confidence,
     double? nms,
+    double? mobilenetConfidence,
+    double? temperature,
   }) async {
     final originalConfidence = _currentConfidenceThreshold;
     final originalNms = _currentNmsThreshold;
+    final originalMobilenetConfidence = _currentMobilenetConfidenceThreshold;
+    final originalTemperature = _currentTemperature;
 
-    setThresholds(confidence: confidence, nms: nms);
+    setThresholds(
+      confidence: confidence,
+      nms: nms,
+      mobilenetConfidence: mobilenetConfidence,
+      temperature: temperature,
+    );
     final results = await detectDiseases(imagePath);
 
     // Restore original thresholds
     _currentConfidenceThreshold = originalConfidence;
     _currentNmsThreshold = originalNms;
+    _currentMobilenetConfidenceThreshold = originalMobilenetConfidence;
+    _currentTemperature = originalTemperature;
 
     return results;
   }
 
+  /// Configure detector for a model trained with less duplication/overfitting.
+  /// Default temperature is now 1.0 (no scaling) which works well for properly trained models.
+  ///
+  /// Temperature guide:
+  /// - 1.0 = No scaling (default, best for training data and well-trained models)
+  /// - 1.2-1.5 = Minimal scaling (for slightly overconfident models)
+  /// - 2.0+ = More aggressive scaling (for overfitted models)
+  void configureForLessDuplicationModel({
+    double temperature =
+        1.0, // No scaling by default for properly trained models
+  }) {
+    setThresholds(temperature: temperature);
+    print(
+      '✅ Configured for model with less duplication: temperature=$temperature',
+    );
+  }
+
   void closeModel() {
-    _interpreter?.close();
-    _interpreter = null;
-    print('✅ TFLite interpreter closed');
+    _yoloInterpreter?.close();
+    _yoloInterpreter = null;
+    _mobilenetSession?.release();
+    _mobilenetSession = null;
+    ort.OrtEnv.instance.release();
+    print('✅ Models closed');
   }
 }

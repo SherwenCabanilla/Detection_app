@@ -13,6 +13,7 @@ dependencies:
   flutter_dotenv: ^5.1.0
   camera: ^0.10.5+5
   tflite_flutter: ^0.10.1
+  onnxruntime_v2: ^1.23.2+1
   path_provider: ^2.1.1
   image_picker: ^0.8.5+3 # Optional: if you want to pick images from the gallery
   image: ^3.0.1
@@ -63,7 +64,9 @@ flutter:
 
   assets:
     - assets/labelsv2.txt
-    - assets/v43.tflite
+    - assets/classification_model.tflite
+    - assets/yolo1class.txt
+    - assets/extension_model.onnx
     - assets/logo.png
     - assets/applogo.png
     - assets/applogo_header.png
