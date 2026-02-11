@@ -1947,7 +1947,7 @@ class _ExpertHomePageState extends State<ExpertHomePage> {
         return 'Powdery Mildew';
       case 'tip_burn':
       case 'tip burn':
-        return 'Unknown';
+        return 'Burnt leaf';
       case 'anthracnose':
         return 'Anthracnose';
       case 'dieback':

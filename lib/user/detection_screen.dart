@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -262,7 +261,8 @@ class _DetectionScreenState extends State<DetectionScreen> {
       case 'powdery_mildew':
         return 'Powdery Mildew';
       case 'tip_burn':
-        return 'Tip Burn';
+      case 'tip burn':
+        return 'Burnt leaf';
       default:
         return label
             .split('_')

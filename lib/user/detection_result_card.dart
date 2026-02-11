@@ -28,7 +28,8 @@ class DetectionResultCard extends StatelessWidget {
       case 'powdery_mildew':
         return 'Powdery Mildew';
       case 'tip_burn':
-        return 'Unknown';
+      case 'tip burn':
+        return 'Burnt leaf';
       default:
         return label
             .split('_')

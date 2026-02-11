@@ -1061,6 +1061,7 @@ String _formatExpertLabel(String label) {
       return 'Powdery Mildew';
     case 'tip_burn':
     case 'tip burn':
+      return 'Burnt leaf';
     case 'unknown':
       return 'Unknown';
     default:

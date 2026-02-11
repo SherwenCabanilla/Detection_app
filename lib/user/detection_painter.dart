@@ -1,5 +1,4 @@
 import 'dart:ui';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'tflite_detector.dart';
 
@@ -42,7 +41,8 @@ class DetectionPainter extends CustomPainter {
       case 'powdery_mildew':
         return 'Powdery Mildew';
       case 'tip_burn':
-        return 'Non-disease related';
+      case 'tip burn':
+        return 'Burnt leaf';
       case 'banana':
       case 'eggplant':
       case 'moringa':

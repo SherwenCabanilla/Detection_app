@@ -80,7 +80,8 @@ class TrackingModels {
       case 'powdery_mildew':
         return 'Powdery Mildew';
       case 'tip_burn':
-        return 'Tip Burn';
+      case 'tip burn':
+        return 'Burnt leaf';
       case 'healthy':
         return 'Healthy';
       case 'dieback':

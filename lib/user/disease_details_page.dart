@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class DiseaseDetailsPage extends StatelessWidget {
   final String name;
@@ -18,6 +19,13 @@ class DiseaseDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final confirmedByNorm = confirmedBy.trim().toLowerCase();
+    final displayConfirmedBy =
+        (confirmedByNorm == 'office of carmen' ||
+                confirmedByNorm == 'agricultural office')
+            ? tr('agricultural_office')
+            : confirmedBy;
+
     return Scaffold(
       backgroundColor: Colors.green,
       appBar: AppBar(
@@ -97,7 +105,10 @@ class DiseaseDetailsPage extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Confirmed by $confirmedBy',
+                      tr(
+                        'provided_by',
+                        namedArgs: {'office': displayConfirmedBy},
+                      ),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 14,

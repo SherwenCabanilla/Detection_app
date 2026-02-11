@@ -2026,7 +2026,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
         return 'Powdery Mildew';
       case 'tip_burn':
       case 'tip burn':
-        return 'Unknown';
+        return 'Burnt leaf';
       default:
         return label
             .replaceAll('_', ' ')

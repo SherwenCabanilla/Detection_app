@@ -647,7 +647,7 @@ class _TrackingPageState extends State<TrackingPage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${TrackingModels.formatLabel(topDisease)} (${(topDiseaseCount / diseased * 100).toStringAsFixed(1)}%)',
+                          '${TrackingModels.formatLabel(topDisease)} (${(total > 0 ? (topDiseaseCount / total * 100) : 0).toStringAsFixed(1)}%)',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
@@ -772,6 +772,124 @@ class _TrackingPageState extends State<TrackingPage> {
     );
   }
 
+  void _showTrackingDescriptionModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.55,
+          minChildSize: 0.35,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.green[700]),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            tr('tracking_desc_title'),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey[900],
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      tr('tracking_desc_intro'),
+                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildRecommendationItem(
+                      tr(
+                        'tracking_desc_bullet_range',
+                        namedArgs: {
+                          'range': _getTimeRangeLabel(_selectedRangeIndex),
+                        },
+                      ),
+                    ),
+                    _buildRecommendationItem(
+                      tr('tracking_desc_bullet_health'),
+                    ),
+                    _buildRecommendationItem(
+                      tr('tracking_desc_bullet_pie'),
+                    ),
+                    _buildRecommendationItem(
+                      tr('tracking_desc_bullet_history'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildTrackingDescriptionLink() {
+    return InkWell(
+      onTap: _showTrackingDescriptionModal,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[300]!, width: 1),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, size: 20, color: Colors.green[700]),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                tr('tracking_desc_link'),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right, color: Colors.grey[500]),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildDistributionChart(Map<String, int> overallCounts, int total) {
     if (total == 0) {
       return const SizedBox.shrink();
@@ -787,7 +905,7 @@ class _TrackingPageState extends State<TrackingPage> {
       sections.add(
         PieChartSectionData(
           value: healthyCount.toDouble(),
-          title: percentage >= 8 ? '${percentage.toStringAsFixed(0)}%' : '',
+          title: percentage >= 8 ? '${percentage.toStringAsFixed(1)}%' : '',
           color: TrackingModels.diseaseColors['healthy'],
           radius: 70,
           titleStyle: const TextStyle(
@@ -808,7 +926,7 @@ class _TrackingPageState extends State<TrackingPage> {
         sections.add(
           PieChartSectionData(
             value: count.toDouble(),
-            title: percentage >= 8 ? '${percentage.toStringAsFixed(0)}%' : '',
+            title: percentage >= 8 ? '${percentage.toStringAsFixed(1)}%' : '',
             color: TrackingModels.diseaseColors[disease],
             radius: 70,
             titleStyle: const TextStyle(
@@ -1949,6 +2067,7 @@ class _TrackingPageState extends State<TrackingPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _buildTrackingDescriptionLink(),
                   // Time range selector
                   Container(
                     padding: const EdgeInsets.symmetric(

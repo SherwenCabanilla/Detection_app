@@ -388,7 +388,7 @@ class _DiseaseEditorScreenState extends State<DiseaseEditorScreen> {
         'scientificName': widget.data['scientificName'],
         'symptoms': symptoms,
         'treatments': treatments,
-        'confirmedBy': widget.data['confirmedBy'] ?? 'Office of Carmen',
+        'confirmedBy': widget.data['confirmedBy'] ?? 'Agricultural Office',
       };
 
       if (widget.docId != null) {

@@ -440,7 +440,7 @@ class _HomePageState extends State<HomePage> {
             'scientificName': data['scientificName'] ?? '',
             'symptoms': List<String>.from(data['symptoms'] ?? []),
             'treatments': List<String>.from(data['treatments'] ?? []),
-            'confirmedBy': data['confirmedBy'] ?? 'Office of Carmen',
+            'confirmedBy': data['confirmedBy'] ?? 'Agricultural Office',
           };
         }
       }
@@ -765,11 +765,19 @@ class _HomePageState extends State<HomePage> {
               name: name,
               imagePath: imagePath,
               scientificName: _diseaseInfo[name]?['scientificName'] ?? '',
-              confirmedBy: _diseaseInfo[name]?['confirmedBy'] ?? 'Office of Carmen',
+              confirmedBy:
+                  _diseaseInfo[name]?['confirmedBy'] ?? 'Agricultural Office',
               details: {
-                'Treatments':
-                    getLocalizedTreatments(context, name) ??
-                    (_diseaseInfo[name]?['treatments'] ?? []),
+                tr('treatments'):
+                    (getLocalizedTreatments(context, name) ??
+                        (_diseaseInfo[name]?['treatments'] ?? [])),
+                tr('preventive_measures'):
+                    (getLocalizedPreventiveMeasures(context, name) ??
+                            const <String>[])
+                        .isNotEmpty
+                        ? (getLocalizedPreventiveMeasures(context, name) ??
+                            const <String>[])
+                        : <String>[tr('not_applicable')],
               },
             ),
       ),
@@ -1632,7 +1640,14 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildDiseaseCard(String name, String imagePath) {
     // Get confirmation source from disease info
-    final confirmedBy = _diseaseInfo[name]?['confirmedBy'] ?? 'Office of Carmen';
+    final confirmedByRaw =
+        _diseaseInfo[name]?['confirmedBy'] ?? 'Agricultural Office';
+    final confirmedByNorm = confirmedByRaw.trim().toLowerCase();
+    final confirmedBy =
+        (confirmedByNorm == 'office of carmen' ||
+                confirmedByNorm == 'agricultural office')
+            ? tr('agricultural_office')
+            : confirmedByRaw;
     
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1679,7 +1694,10 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            'Confirmed by $confirmedBy',
+                            tr(
+                              'provided_by',
+                              namedArgs: {'office': confirmedBy},
+                            ),
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[600],
@@ -2137,6 +2155,7 @@ class _HomePageState extends State<HomePage> {
         return 'Powdery Mildew';
       case 'tip_burn':
       case 'tip burn':
+        return 'Burnt leaf';
       case 'unknown':
         return 'Unknown';
       case 'healthy':

@@ -110,121 +110,121 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
             final imagePath =
                 (img['path'] ?? img['imagePath'] ?? '').toString();
             final displayPath = imageUrl.isNotEmpty ? imageUrl : imagePath;
-            final detections =
-                (img['results'] as List?)
-                    ?.where(
-                      (d) =>
-                          d is Map &&
-                          d['disease'] != null &&
-                          d['confidence'] != null &&
-                          d['boundingBox'] != null,
-                    )
-                    .cast<Map>()
-                    .toList() ??
-                [];
 
             return Dialog(
               backgroundColor: Colors.black,
               insetPadding: const EdgeInsets.all(12),
               child: LayoutBuilder(
                 builder: (context, constraints) {
+                  final detections =
+                      (img['results'] as List?)
+                          ?.where(
+                            (d) =>
+                                d is Map &&
+                                d['disease'] != null &&
+                                d['confidence'] != null &&
+                                d['boundingBox'] != null,
+                          )
+                          .cast<Map>()
+                          .toList() ??
+                      [];
+
                   final widgetW = constraints.maxWidth;
                   final widgetH = constraints.maxHeight;
-
-                  // Prefer stored dimensions if available (faster / avoids network decode)
-                  final storedImageWidth = img['imageWidth'] as num?;
-                  final storedImageHeight = img['imageHeight'] as num?;
-
-                  Widget buildZoomLayer(Size originalSize) {
-                    // BoxFit.cover math (consistent fullscreen look)
-                    final scaleX = widgetW / originalSize.width;
-                    final scaleY = widgetH / originalSize.height;
-                    final scale = scaleX > scaleY ? scaleX : scaleY;
-                    final scaledW = originalSize.width * scale;
-                    final scaledH = originalSize.height * scale;
-                    final dx = (widgetW - scaledW) / 2;
-                    final dy = (widgetH - scaledH) / 2;
-
-                    return InteractiveViewer(
-                      key: ValueKey(currentIndex),
-                      minScale: 0.5,
-                      maxScale: 5.0,
-                      panEnabled: true,
-                      scaleEnabled: true,
-                      boundaryMargin: const EdgeInsets.all(double.infinity),
-                      child: SizedBox(
-                        width: widgetW,
-                        height: widgetH,
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: _buildImageWidget(
-                                displayPath,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            if (_showBoundingBoxes && detections.isNotEmpty)
-                              Positioned.fill(
-                                child: CustomPaint(
-                                  painter: DetectionPainter(
-                                    results:
-                                        detections.map((d) {
-                                          final bb = d['boundingBox'] as Map;
-                                          return DetectionResult(
-                                            label: d['disease'],
-                                            confidence: d['confidence'],
-                                            boundingBox: Rect.fromLTRB(
-                                              (bb['left'] as num).toDouble(),
-                                              (bb['top'] as num).toDouble(),
-                                              (bb['right'] as num).toDouble(),
-                                              (bb['bottom'] as num).toDouble(),
-                                            ),
-                                          );
-                                        }).toList(),
-                                    originalImageSize: originalSize,
-                                    displayedImageSize: Size(scaledW, scaledH),
-                                    displayedImageOffset: Offset(dx, dy),
-                                    debugMode: false,
-                                  ),
-                                  size: Size(widgetW, widgetH),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-
-                  final zoomLayer =
-                      (storedImageWidth != null && storedImageHeight != null)
-                          ? buildZoomLayer(
-                            Size(
-                              storedImageWidth.toDouble(),
-                              storedImageHeight.toDouble(),
-                            ),
-                          )
-                          : FutureBuilder<Size>(
-                            future: _getImageSize(
-                              displayPath.startsWith('http') &&
-                                      displayPath.isNotEmpty
-                                  ? NetworkImage(displayPath)
-                                  : FileImage(File(displayPath)),
-                            ),
-                            builder: (context, snapshot) {
-                              if (!snapshot.hasData) {
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              }
-                              return buildZoomLayer(snapshot.data!);
-                            },
-                          );
 
                   return Stack(
                     children: [
                       Positioned.fill(
-                        child: zoomLayer,
+                        child: InteractiveViewer(
+                          key: ValueKey(currentIndex),
+                          minScale: 0.5,
+                          maxScale: 5.0,
+                          panEnabled: true,
+                          scaleEnabled: true,
+                          boundaryMargin: const EdgeInsets.all(double.infinity),
+                          child: Center(
+                            child: _buildImageWidget(
+                              displayPath,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
                       ),
+                      // Bounding boxes overlay (ignore pointer so zoom still works)
+                      if (_showBoundingBoxes && detections.isNotEmpty)
+                        IgnorePointer(
+                          child: Builder(
+                            builder: (context) {
+                              final storedImageWidth =
+                                  img['imageWidth'] as num?;
+                              final storedImageHeight =
+                                  img['imageHeight'] as num?;
+
+                              Future<Size> _sizeFuture() async {
+                                if (storedImageWidth != null &&
+                                    storedImageHeight != null) {
+                                  return Size(
+                                    storedImageWidth.toDouble(),
+                                    storedImageHeight.toDouble(),
+                                  );
+                                }
+                                return await _getImageSize(
+                                  displayPath.startsWith('http') &&
+                                          displayPath.isNotEmpty
+                                      ? NetworkImage(displayPath)
+                                      : FileImage(File(displayPath)),
+                                );
+                              }
+
+                              return FutureBuilder<Size>(
+                                future: _sizeFuture(),
+                                builder: (context, snapshot) {
+                                  if (!snapshot.hasData) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  final originalSize = snapshot.data!;
+                                  // BoxFit.contain math (no crop; natural look)
+                                  final scaleX = widgetW / originalSize.width;
+                                  final scaleY = widgetH / originalSize.height;
+                                  final scale =
+                                      scaleX < scaleY ? scaleX : scaleY;
+                                  final scaledW = originalSize.width * scale;
+                                  final scaledH = originalSize.height * scale;
+                                  final dx = (widgetW - scaledW) / 2;
+                                  final dy = (widgetH - scaledH) / 2;
+
+                                  return CustomPaint(
+                                    painter: DetectionPainter(
+                                      results:
+                                          detections.map((d) {
+                                            final bb = d['boundingBox'] as Map;
+                                            return DetectionResult(
+                                              label: d['disease'],
+                                              confidence: d['confidence'],
+                                              boundingBox: Rect.fromLTRB(
+                                                (bb['left'] as num).toDouble(),
+                                                (bb['top'] as num).toDouble(),
+                                                (bb['right'] as num).toDouble(),
+                                                (bb['bottom'] as num)
+                                                    .toDouble(),
+                                              ),
+                                            );
+                                          }).toList(),
+                                      originalImageSize: originalSize,
+                                      displayedImageSize: Size(
+                                        scaledW,
+                                        scaledH,
+                                      ),
+                                      displayedImageOffset: Offset(dx, dy),
+                                      debugMode: false,
+                                    ),
+                                    size: Size(widgetW, widgetH),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
                       Positioned(
                         top: 8,
                         right: 8,
@@ -540,6 +540,34 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: Colors.green,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (isCompleted) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.verified,
+                                  size: 16,
+                                  color: Colors.green[700],
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    tr(
+                                      'confirmed_by',
+                                      namedArgs: {
+                                        'office': tr('office_of_carmen'),
+                                      },
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey[700],
+                                      fontStyle: FontStyle.italic,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1869,7 +1897,7 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
         return 'Powdery Mildew';
       case 'tip_burn':
       case 'tip burn':
-        return 'Unknown';
+        return 'Burnt leaf';
       default:
         return label
             .split('_')
@@ -2025,11 +2053,18 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
                       ? imagePath
                       : _getDiseaseImagePath(diseaseKey),
               scientificName: info?['scientificName'] ?? '',
-              confirmedBy: info?['confirmedBy'] ?? 'Office of Carmen',
+              confirmedBy: info?['confirmedBy'] ?? 'Agricultural Office',
               details: {
-                'Treatments':
-                    getLocalizedTreatments(context, diseaseKey) ??
-                    ((info?['treatments'] as List?)?.cast<String>() ?? []),
+                tr('treatments'):
+                    (getLocalizedTreatments(context, diseaseKey) ??
+                        ((info?['treatments'] as List?)?.cast<String>() ?? [])),
+                tr('preventive_measures'):
+                    (getLocalizedPreventiveMeasures(context, diseaseKey) ??
+                            const <String>[])
+                        .isNotEmpty
+                        ? (getLocalizedPreventiveMeasures(context, diseaseKey) ??
+                            const <String>[])
+                        : <String>[tr('not_applicable')],
               },
             ),
       ),
@@ -2089,7 +2124,7 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
             'scientificName': data['scientificName'] ?? '',
             'symptoms': List<String>.from(data['symptoms'] ?? []),
             'treatments': List<String>.from(data['treatments'] ?? []),
-            'confirmedBy': data['confirmedBy'] ?? 'Office of Carmen',
+            'confirmedBy': data['confirmedBy'] ?? 'Agricultural Office',
           };
         }
       }
@@ -2388,9 +2423,9 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
                                   ),
                                   const SizedBox(height: 8),
                                   ...((getLocalizedTreatments(
-                                                context,
-                                                diseaseName,
-                                              ) ??
+                                            context,
+                                            diseaseName,
+                                          ) ??
                                           (info['treatments'] as List<String>)))
                                       .map<Widget>(
                                         (t) => Padding(

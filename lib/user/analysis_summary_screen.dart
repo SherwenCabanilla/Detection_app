@@ -413,7 +413,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
             'scientificName': data['scientificName'] ?? '',
             'symptoms': List<String>.from(data['symptoms'] ?? []),
             'treatments': List<String>.from(data['treatments'] ?? []),
-            'confirmedBy': data['confirmedBy'] ?? 'Office of Carmen',
+            'confirmedBy': data['confirmedBy'] ?? 'Agricultural Office',
           };
         }
       }
@@ -755,7 +755,8 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
       case 'powdery_mildew':
         return 'Powdery Mildew';
       case 'tip_burn':
-        return 'Non-disease related';
+      case 'tip burn':
+        return 'Burnt leaf';
       case 'unknown':
         return 'Unknown';
       case 'banana':
@@ -893,11 +894,18 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
           name: name,
           imagePath: imagePath.isEmpty ? 'assets/replace_disease/healthy_image.jpg' : imagePath,
           scientificName: info?['scientificName'] ?? '',
-          confirmedBy: info?['confirmedBy'] ?? 'Office of Carmen',
+          confirmedBy: info?['confirmedBy'] ?? 'Agricultural Office',
           details: {
-            'Treatments':
-                getLocalizedTreatments(context, diseaseKey) ??
-                ((info?['treatments'] as List?)?.cast<String>() ?? []),
+            tr('treatments'):
+                (getLocalizedTreatments(context, diseaseKey) ??
+                    ((info?['treatments'] as List?)?.cast<String>() ?? [])),
+            tr('preventive_measures'):
+                (getLocalizedPreventiveMeasures(context, diseaseKey) ??
+                        const <String>[])
+                    .isNotEmpty
+                    ? (getLocalizedPreventiveMeasures(context, diseaseKey) ??
+                        const <String>[])
+                    : <String>[tr('not_applicable')],
           },
         ),
       ),
