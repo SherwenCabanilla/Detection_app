@@ -56,7 +56,7 @@ class TFLiteDetector {
               .map((e) => e.trim())
               .where((e) => e.isNotEmpty)
               .toList();
-      _interpreter = await Interpreter.fromAsset('assets/v40.tflite');
+      _interpreter = await Interpreter.fromAsset('assets/v43.tflite');
       print('✅ Model loaded with ${_labels.length} labels');
     } catch (e) {
       print('❌ Failed to load model: $e');

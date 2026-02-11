@@ -13,12 +13,16 @@ class DetectionPainter extends CustomPainter {
   // Disease color map
   static const Map<String, Color> diseaseColors = {
     'anthracnose': Colors.orange,
-    'backterial_blackspot':
-        Colors.purple, // Keep original label for model compatibility
+    'backterial_blackspot': Colors.purple, // Keep original label for model compatibility
+    'bacterial_blackspot': Colors.purple, // Correct spelling
     'dieback': Colors.red,
     'healthy': Color.fromARGB(255, 2, 119, 252),
     'powdery_mildew': Color.fromARGB(255, 9, 46, 2),
     'tip_burn': Colors.brown,
+    // Non-mango leaf classes (will be filtered out)
+    'banana': Colors.grey,
+    'eggplant': Colors.grey,
+    'moringa': Colors.grey,
     // fallback color
     'Unknown': Colors.grey,
   };
@@ -38,7 +42,11 @@ class DetectionPainter extends CustomPainter {
       case 'powdery_mildew':
         return 'Powdery Mildew';
       case 'tip_burn':
-        return 'Unknown';
+        return 'Non-disease related';
+      case 'banana':
+      case 'eggplant':
+      case 'moringa':
+        return 'Non-mango leaf';
       default:
         return label
             .split('_')

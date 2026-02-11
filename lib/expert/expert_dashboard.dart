@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'scan_request_list.dart';
+import 'scan_request_detail.dart';
 import 'disease_editor.dart';
 import 'expert_profile.dart';
 // import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -922,12 +923,13 @@ class _ExpertHomePageState extends State<ExpertHomePage> {
                 // Debug removed
 
                 // Store recent reviews for graph
-                recentReviews.add({
-                  'date': reviewed,
-                  'responseTime': responseTime,
-                  'disease':
-                      data['diseaseSummary']?[0]?['disease'] ?? 'Unknown',
-                });
+              recentReviews.add({
+                'date': reviewed,
+                'responseTime': responseTime,
+                'disease': _getDiseaseFromSummary(data['diseaseSummary']),
+                'requestId': data['id'] ?? doc.id,
+                'requestData': data,
+              });
               }
             } catch (e) {
               // print('Error parsing dates: $e');
@@ -1097,7 +1099,9 @@ class _ExpertHomePageState extends State<ExpertHomePage> {
               recentReviews.add({
                 'date': reviewed,
                 'responseTime': responseTime,
-                'disease': data['diseaseSummary']?[0]?['disease'] ?? 'Unknown',
+                'disease': _getDiseaseFromSummary(data['diseaseSummary']),
+                'requestId': data['id'] ?? doc.id,
+                'requestData': data,
               });
             }
           } catch (e) {
@@ -1776,9 +1780,9 @@ class _ExpertHomePageState extends State<ExpertHomePage> {
                 ),
                 const SizedBox(height: 20),
 
-                // Response Time Analysis Section
+                // Recent Activities Section
                 Text(
-                  'Response Time Analysis',
+                  'Recent Activities',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -1786,538 +1790,200 @@ class _ExpertHomePageState extends State<ExpertHomePage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Time Range Filter at top
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[50],
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.grey[300]!),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.calendar_today, size: 18),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: DropdownButton<int>(
-                                  value: _selectedRangeIndex,
-                                  isExpanded: true,
-                                  underline: const SizedBox.shrink(),
-                                  items: [
-                                    const DropdownMenuItem(
-                                      value: 0,
-                                      child: Text('Last 7 Days'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 1,
-                                      child: Text(
-                                        _monthlyYear != null &&
-                                                _monthlyMonth != null
-                                            ? DateFormat(
-                                              'MMMM yyyy',
-                                              'en',
-                                            ).format(
-                                              DateTime(
-                                                _monthlyYear!,
-                                                _monthlyMonth!,
-                                                1,
-                                              ),
-                                            )
-                                            : 'Monthly',
-                                      ),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 2,
-                                      child: Text(
-                                        _customStartDate != null &&
-                                                _customEndDate != null
-                                            ? 'Custom: ${DateFormat('MMM d', 'en').format(_customStartDate!)} – ${DateFormat('MMM d', 'en').format(_customEndDate!)}'
-                                            : 'Custom',
-                                      ),
-                                    ),
-                                  ],
-                                  onChanged: (i) async {
-                                    if (i == null) return;
-                                    if (i == 1) {
-                                      // Show custom month-year picker
-                                      final now = DateTime.now();
-                                      final picked = await _showMonthYearPicker(
-                                        context: context,
-                                        initialDate: DateTime(
-                                          _monthlyYear ?? now.year,
-                                          _monthlyMonth ?? now.month,
-                                          1,
-                                        ),
-                                        firstDate: DateTime(2020, 1),
-                                        lastDate: DateTime(now.year, now.month),
-                                      );
-                                      if (picked != null) {
-                                        setState(() {
-                                          _monthlyYear = picked.year;
-                                          _monthlyMonth = picked.month;
-                                          _selectedRangeIndex = 1;
-                                        });
-                                        await _saveRangeIndex(1);
-                                        await _saveMonthly(
-                                          picked.year,
-                                          picked.month,
-                                        );
-                                      }
-                                    } else if (i == 2) {
-                                      await _pickCustomRange();
-                                    } else {
-                                      setState(() => _selectedRangeIndex = 0);
-                                      await _saveRangeIndex(0);
-                                    }
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        // Metrics Row
-                        Row(
-                          children: [
-                            // Completed Reviews for timeframe
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.check_circle,
-                                        color: Colors.green,
-                                        size: 20,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          'Reviews in Period',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.grey[800],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    '${_filterReviewsForRange().length}',
-                                    style: TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.green[700],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            // Average Response Time
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.timer,
-                                        color: Colors.blue,
-                                        size: 20,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          'Avg Response Time',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.grey[800],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    '${_formatResponseTime(_filteredAverageHours())}',
-                                    style: TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.blue[700],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        // Performance Feedback
-                        Builder(
-                          builder: (context) {
-                            final feedback = _getPerformanceFeedback(
-                              _filteredAverageHours(),
-                            );
-                            final currentAvg = _filteredAverageHours();
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: (feedback['color'] as Color).withOpacity(
-                                  0.1,
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: (feedback['color'] as Color)
-                                      .withOpacity(0.3),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    feedback['icon'] as IconData,
-                                    color: feedback['color'] as Color,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      feedback['message'] as String,
-                                      style: TextStyle(
-                                        color: feedback['color'] as Color,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  InkWell(
-                                    onTap: () => _showPerformanceTargetsDialog(
-                                      context,
-                                      currentAvg,
-                                    ),
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      child: Icon(
-                                        Icons.info_outline,
-                                        color: feedback['color'] as Color,
-                                        size: 18,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        if (_recentReviews.isNotEmpty) ...[
-                          Text(
-                            'Response Time Distribution',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Builder(
-                            builder: (context) {
-                              // Filter reviews per selected range
-                              DateTime today = DateTime.now();
-                              DateTime start7 = DateTime(
-                                today.year,
-                                today.month,
-                                today.day,
-                              ).subtract(const Duration(days: 6));
-                              final List<Map<String, dynamic>> filtered =
-                                  _recentReviews.where((r) {
-                                      final d = r['date'] as DateTime?;
-                                      if (d == null) return false;
-                                      final dayOnly = DateTime(
-                                        d.year,
-                                        d.month,
-                                        d.day,
-                                      );
-                                      if (_selectedRangeIndex == 0) {
-                                        return !dayOnly.isBefore(start7) &&
-                                            !dayOnly.isAfter(
-                                              DateTime(
-                                                today.year,
-                                                today.month,
-                                                today.day,
-                                              ),
-                                            );
-                                      }
-                                      if (_selectedRangeIndex == 1 &&
-                                          _monthlyYear != null &&
-                                          _monthlyMonth != null) {
-                                        // Monthly filter
-                                        final startOfMonth = DateTime(
-                                          _monthlyYear!,
-                                          _monthlyMonth!,
-                                          1,
-                                        );
-                                        final endOfMonth = DateTime(
-                                          _monthlyYear!,
-                                          _monthlyMonth! + 1,
-                                          0,
-                                        );
-                                        return !dayOnly.isBefore(
-                                              startOfMonth,
-                                            ) &&
-                                            !dayOnly.isAfter(endOfMonth);
-                                      }
-                                      if (_selectedRangeIndex == 2) {
-                                        if (_customStartDate == null ||
-                                            _customEndDate == null)
-                                          return true;
-                                        final s = DateTime(
-                                          _customStartDate!.year,
-                                          _customStartDate!.month,
-                                          _customStartDate!.day,
-                                        );
-                                        final e = DateTime(
-                                          _customEndDate!.year,
-                                          _customEndDate!.month,
-                                          _customEndDate!.day,
-                                        );
-                                        return !dayOnly.isBefore(s) &&
-                                            !dayOnly.isAfter(e);
-                                      }
-                                      return true; // Fallback
-                                    }).toList();
-
-                              // Calculate distribution into categories
-                              int excellent = 0; // 0-6h
-                              int good = 0; // 6-12h
-                              int acceptable = 0; // 12-24h
-                              int needsImprovement = 0; // 24-48h
-                              int critical = 0; // >48h
-
-                              for (var review in filtered) {
-                                final responseTime = (review['responseTime'] as num).toDouble();
-                                if (responseTime <= 6) {
-                                  excellent++;
-                                } else if (responseTime <= 12) {
-                                  good++;
-                                } else if (responseTime <= 24) {
-                                  acceptable++;
-                                } else if (responseTime <= 48) {
-                                  needsImprovement++;
-                                } else {
-                                  critical++;
-                                }
-                              }
-
-                              final distribution = [
-                                excellent,
-                                good,
-                                acceptable,
-                                needsImprovement,
-                                critical,
-                              ];
-
-                              final maxValue = distribution.isEmpty
-                                  ? 1.0
-                                  : distribution.reduce((a, b) => a > b ? a : b).toDouble();
-
-                              // Category labels and colors
-                              final categories = [
-                                {'label': '0-6h', 'color': Colors.green, 'name': 'Excellent'},
-                                {'label': '6-12h', 'color': Colors.lightGreen, 'name': 'Good'},
-                                {'label': '12-24h', 'color': Colors.orange, 'name': 'Acceptable'},
-                                {'label': '24-48h', 'color': Colors.deepOrange, 'name': 'Needs Improvement'},
-                                {'label': '>48h', 'color': Colors.red, 'name': 'Critical'},
-                              ];
-
-                              return Column(
-                                children: [
-                                  // Bar Chart
-                                  SizedBox(
-                                    height: 200,
-                                    child: BarChart(
-                                      BarChartData(
-                                        alignment: BarChartAlignment.spaceAround,
-                                        maxY: maxValue > 0 ? maxValue * 1.2 : 10,
-                                        barTouchData: BarTouchData(
-                                          enabled: true,
-                                          touchTooltipData: BarTouchTooltipData(
-                                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                                              final category = categories[groupIndex];
-                                              return BarTooltipItem(
-                                                '${category['label']}\n${rod.toY.toInt()} reviews',
-                                                const TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                        titlesData: FlTitlesData(
-                                          show: true,
-                                          rightTitles: AxisTitles(
-                                            sideTitles: SideTitles(showTitles: false),
-                                          ),
-                                          topTitles: AxisTitles(
-                                            sideTitles: SideTitles(showTitles: false),
-                                          ),
-                                          bottomTitles: AxisTitles(
-                                            sideTitles: SideTitles(
-                                              showTitles: true,
-                                              getTitlesWidget: (value, meta) {
-                                                final index = value.toInt();
-                                                if (index >= 0 && index < categories.length) {
-                                                  return Padding(
-                                                    padding: const EdgeInsets.only(top: 8),
-                                                    child: Text(
-                                                      categories[index]['label'] as String,
-                                                      style: TextStyle(
-                                                        fontSize: 10,
-                                                        color: Colors.grey[700],
-                                                      ),
-                                                    ),
-                                                  );
-                                                }
-                                                return const SizedBox.shrink();
-                                              },
-                                              reservedSize: 30,
-                                            ),
-                                          ),
-                                          leftTitles: AxisTitles(
-                                            sideTitles: SideTitles(
-                                              showTitles: true,
-                                              reservedSize: 40,
-                                              getTitlesWidget: (value, meta) {
-                                                if (value % 1 == 0 && value >= 0) {
-                                                  return Text(
-                                                    value.toInt().toString(),
-                                                    style: TextStyle(
-                                                      fontSize: 10,
-                                                      color: Colors.grey[700],
-                                                    ),
-                                                  );
-                                                }
-                                                return const SizedBox.shrink();
-                                              },
-                                            ),
-                                          ),
-                                        ),
-                                        gridData: FlGridData(
-                                          show: true,
-                                          drawVerticalLine: false,
-                                          horizontalInterval: maxValue > 10 ? 5 : 1,
-                                          getDrawingHorizontalLine: (value) {
-                                            return FlLine(
-                                              color: Colors.grey[300]!,
-                                              strokeWidth: 1,
-                                            );
-                                          },
-                                        ),
-                                        borderData: FlBorderData(
-                                          show: true,
-                                          border: Border(
-                                            bottom: BorderSide(color: Colors.grey[400]!),
-                                            left: BorderSide(color: Colors.grey[400]!),
-                                          ),
-                                        ),
-                                        barGroups: distribution.asMap().entries.map((entry) {
-                                          final index = entry.key;
-                                          final value = entry.value.toDouble();
-                                          return BarChartGroupData(
-                                            x: index,
-                                            barRods: [
-                                              BarChartRodData(
-                                                toY: value,
-                                                color: categories[index]['color'] as Color,
-                                                width: 40,
-                                                borderRadius: const BorderRadius.vertical(
-                                                  top: Radius.circular(4),
-                                                ),
-                                              ),
-                                            ],
-                                          );
-                                        }).toList(),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  // Compact Legend - Performance names only
-                                  Wrap(
-                                    alignment: WrapAlignment.center,
-                                    spacing: 16,
-                                    runSpacing: 8,
-                                    children: categories.map((category) {
-                                      return Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(
-                                            width: 12,
-                                            height: 12,
-                                            decoration: BoxDecoration(
-                                              color: category['color'] as Color,
-                                              borderRadius: BorderRadius.circular(3),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            category['name'] as String,
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: Colors.grey[600],
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    }).toList(),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        ] else ...[
-                          Container(
-                            height: 100,
-                            alignment: Alignment.center,
-                            child: Text(
-                              'No recent reviews to display',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
+                _buildRecentActivities(),
               ],
             ),
           ),
         );
       },
     );
+  }
+
+  Widget _buildRecentActivities() {
+    if (_recentReviews.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Center(
+            child: Column(
+              children: [
+                Icon(
+                  Icons.history,
+                  size: 48,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No recent activities',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Get the most recent 5 reviews
+    final recent = _recentReviews.take(5).toList();
+
+    return Card(
+      child: Column(
+        children: [
+          ...recent.asMap().entries.map((entry) {
+            final index = entry.key;
+            final review = entry.value;
+            final date = review['date'] as DateTime?;
+            final disease = review['disease'] as String? ?? 'Unknown';
+            final isLast = index == recent.length - 1;
+
+            String formattedDate = 'Recently';
+            if (date != null) {
+              final now = DateTime.now();
+              final difference = now.difference(date);
+              if (difference.inDays == 0) {
+                if (difference.inHours == 0) {
+                  formattedDate = '${difference.inMinutes} minutes ago';
+                } else {
+                  formattedDate = '${difference.inHours} hours ago';
+                }
+              } else if (difference.inDays == 1) {
+                formattedDate = 'Yesterday';
+              } else if (difference.inDays < 7) {
+                formattedDate = '${difference.inDays} days ago';
+              } else {
+                formattedDate = DateFormat('MMM d, yyyy').format(date);
+              }
+            }
+
+            return Container(
+              decoration: BoxDecoration(
+                border: isLast
+                    ? null
+                    : Border(
+                        bottom: BorderSide(
+                          color: Colors.grey[200]!,
+                          width: 1,
+                        ),
+                      ),
+              ),
+              child: InkWell(
+                onTap: () {
+                  final requestData = review['requestData'] as Map<String, dynamic>?;
+                  if (requestData != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ScanRequestDetail(request: requestData),
+                      ),
+                    );
+                  }
+                },
+                child: ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.green[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.check_circle,
+                      color: Colors.green[700],
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    'Validated report',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatDiseaseName(disease),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        formattedDate,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                  trailing: Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: Colors.grey[400],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
+  String _formatDiseaseName(String disease) {
+    if (disease.isEmpty || disease.toLowerCase() == 'unknown') {
+      return 'Unknown Disease';
+    }
+    
+    // Use the same formatting logic as scan_request_detail.dart
+    switch (disease.toLowerCase()) {
+      case 'backterial_blackspot':
+      case 'bacterial blackspot':
+      case 'bacterial black spot':
+      case 'bacterial_blackspot':
+        return 'Bacterial black spot';
+      case 'powdery_mildew':
+      case 'powdery mildew':
+        return 'Powdery Mildew';
+      case 'tip_burn':
+      case 'tip burn':
+        return 'Unknown';
+      case 'anthracnose':
+        return 'Anthracnose';
+      case 'dieback':
+        return 'Dieback';
+      case 'healthy':
+        return 'Healthy';
+      default:
+        return disease
+            .replaceAll('_', ' ')
+            .split(' ')
+            .map((word) => word.isNotEmpty
+                ? word[0].toUpperCase() + word.substring(1)
+                : '')
+            .join(' ');
+    }
+  }
+
+  String _getDiseaseFromSummary(dynamic diseaseSummary) {
+    if (diseaseSummary == null || !(diseaseSummary is List) || diseaseSummary.isEmpty) {
+      return 'Unknown';
+    }
+    final firstDisease = diseaseSummary[0];
+    if (firstDisease is Map) {
+      return firstDisease['label'] ?? 
+             firstDisease['disease'] ?? 
+             firstDisease['name'] ?? 
+             'Unknown';
+    }
+    return 'Unknown';
   }
 }

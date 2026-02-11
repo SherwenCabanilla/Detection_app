@@ -1,7 +1,9 @@
 anthracnose
-backterial_blackspot
+bacterial_blackspot
+banana
 dieback
+eggplant
 healthy
+moringa
 powdery_mildew
 tip_burn
-place

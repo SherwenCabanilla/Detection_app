@@ -39,6 +39,72 @@ class _ScanPageState extends State<ScanPage> {
     );
   }
 
+  // Show validation error as modal dialog
+  void _showValidationErrorDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.orange[700],
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Warning',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.grey[700],
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: Text(
+              'OK',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.orange[700],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Validate detection results - returns error message if validation fails, null if OK
+  String? _validateDetectionResults(Map<int, List<DetectionResult>> allResults) {
+    // All detections are now allowed to proceed to analysis summary
+    // Warnings will be shown in the analysis summary screen instead
+    return null;
+  }
+
   // Analysis method with UI yielding to keep it responsive
   Future<Map<int, List<DetectionResult>>> _performAnalysisWithUIYielding(
     List<String> imagePaths,
@@ -177,6 +243,14 @@ class _ScanPageState extends State<ScanPage> {
         // Close loading dialog smoothly
         Navigator.pop(context);
         print('DEBUG: Dialog closed smoothly');
+
+        // Validate detection results before navigating
+        final validationResult = _validateDetectionResults(allResults);
+        if (validationResult != null) {
+          // Show error message as modal dialog and don't proceed
+          _showValidationErrorDialog(context, validationResult);
+          return;
+        }
 
         // Navigate directly to analysis summary
         Navigator.push(

@@ -12,6 +12,7 @@ import 'package:hive/hive.dart';
 import 'package:image/image.dart' as img;
 import 'tflite_detector.dart';
 import 'detection_painter.dart';
+import 'disease_details_page.dart';
 // import 'detection_carousel_screen.dart';
 // import 'detection_result_card.dart';
 // import 'tracking_page.dart';
@@ -56,6 +57,322 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     });
     // Load disease information from Firestore
     _loadDiseaseInfo();
+    // Check if there are no detections and show modal
+    Future.microtask(() {
+      if (mounted) {
+        _checkAndShowNoDetectionModal();
+      }
+    });
+  }
+
+  // Check if there are warnings that should prevent sending for review
+  bool _hasWarnings() {
+    final diseaseCounts = _getOverallDiseaseCount();
+    final healthyCount = _getHealthyCount();
+    final sortedDiseases = diseaseCounts.entries.toList()..sort((a, b) {
+      final percentageA = _getDiseasePercentage(a.key, diseaseCounts);
+      final percentageB = _getDiseasePercentage(b.key, diseaseCounts);
+      return percentageB.compareTo(percentageA);
+    });
+    
+    // Collect all detected labels
+    final Set<String> allDetectedLabels = {};
+    for (var results in widget.allResults.values) {
+      for (var result in results) {
+        allDetectedLabels.add(result.label.toLowerCase());
+      }
+    }
+    
+    // Valid mango leaf classes
+    const validMangoLeafClasses = {
+      'healthy',
+      'anthracnose',
+      'bacterial_blackspot',
+      'backterial_blackspot',
+      'dieback',
+      'powdery_mildew',
+    };
+    
+    // Non-mango leaf classes
+    const nonMangoLeafClasses = {
+      'banana',
+      'eggplant',
+      'moringa',
+    };
+    
+    // Check if there are any valid mango leaf detections
+    final hasValidMangoLeaf = allDetectedLabels.any(
+      (label) => validMangoLeafClasses.contains(label),
+    );
+    
+    // Check if only non-mango leaf classes are detected
+    final onlyNonMangoLeaf = allDetectedLabels.isNotEmpty &&
+        allDetectedLabels.every(
+          (label) => nonMangoLeafClasses.contains(label),
+        ) && !hasValidMangoLeaf;
+    
+    // Check if only tip_burn is detected
+    final onlyTipBurn = allDetectedLabels.length == 1 && 
+        allDetectedLabels.contains('tip_burn');
+    
+    // Check if no detections
+    final noDetections = sortedDiseases.isEmpty && healthyCount == 0;
+    
+    // Return true if any warning condition is met
+    return onlyNonMangoLeaf || onlyTipBurn || noDetections;
+  }
+
+  void _checkAndShowNoDetectionModal() {
+    final diseaseCounts = _getOverallDiseaseCount();
+    final healthyCount = _getHealthyCount();
+    final sortedDiseases = diseaseCounts.entries.toList()..sort((a, b) {
+      final percentageA = _getDiseasePercentage(a.key, diseaseCounts);
+      final percentageB = _getDiseasePercentage(b.key, diseaseCounts);
+      return percentageB.compareTo(percentageA);
+    });
+    
+    // Collect all detected labels
+    final Set<String> allDetectedLabels = {};
+    for (var results in widget.allResults.values) {
+      for (var result in results) {
+        allDetectedLabels.add(result.label.toLowerCase());
+      }
+    }
+    
+    // Valid mango leaf classes
+    const validMangoLeafClasses = {
+      'healthy',
+      'anthracnose',
+      'bacterial_blackspot',
+      'backterial_blackspot',
+      'dieback',
+      'powdery_mildew',
+    };
+    
+    // Non-mango leaf classes
+    const nonMangoLeafClasses = {
+      'banana',
+      'eggplant',
+      'moringa',
+    };
+    
+    // Check if there are any valid mango leaf detections
+    final hasValidMangoLeaf = allDetectedLabels.any(
+      (label) => validMangoLeafClasses.contains(label),
+    );
+    
+    // Check if only non-mango leaf classes are detected
+    final onlyNonMangoLeaf = allDetectedLabels.isNotEmpty &&
+        allDetectedLabels.every(
+          (label) => nonMangoLeafClasses.contains(label),
+        ) && !hasValidMangoLeaf;
+    
+    // Check if only tip_burn is detected
+    final onlyTipBurn = allDetectedLabels.length == 1 && 
+        allDetectedLabels.contains('tip_burn');
+    
+    // Show non-mango leaf warning modal if only non-mango leaf detected
+    if (onlyNonMangoLeaf) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showNonMangoLeafWarningModal();
+        }
+      });
+      return;
+    }
+    
+    // Show tip_burn warning modal if only tip_burn detected
+    if (onlyTipBurn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showTipBurnWarningModal();
+        }
+      });
+      return;
+    }
+    
+    // Show modal if no diseases and no healthy leaves detected
+    if (sortedDiseases.isEmpty && healthyCount == 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showNoDetectionModal();
+        }
+      });
+    }
+  }
+
+  void _showNonMangoLeafWarningModal() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.orange[700],
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Warning',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'The image does not appear to be a mango leaf. Please ensure you are scanning mango leaves for accurate disease detection.',
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.grey[700],
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: Text(
+              'OK',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.orange[700],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTipBurnWarningModal() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.orange[700],
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Warning',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'No disease symptoms detected. Please scan mango leaves that show visible signs of disease for analysis.',
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.grey[700],
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: Text(
+              'OK',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.orange[700],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showNoDetectionModal() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.orange[700],
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Warning',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'No diseases or healthy leaves were detected in the scanned images. Please ensure the photo is clear and well-lit, the mango leaf is in focus, and the entire leaf is captured in the frame.',
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.grey[700],
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: Text(
+              'OK',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.orange[700],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadDiseaseInfo() async {
@@ -120,13 +437,34 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
   }
 
   Map<String, int> _getOverallDiseaseCount() {
+    // Non-mango leaf classes, tip_burn, and healthy should be excluded from disease counts
+    const nonMangoLeafClasses = {'banana', 'eggplant', 'moringa'};
+    const excludedClasses = {'healthy', 'tip_burn', 'unknown', ...nonMangoLeafClasses};
+    
     final Map<String, int> counts = {};
     for (var results in widget.allResults.values) {
       for (var result in results) {
-        counts[result.label] = (counts[result.label] ?? 0) + 1;
+        final label = result.label.toLowerCase();
+        // Only count valid mango leaf diseases (excluding healthy)
+        if (!excludedClasses.contains(label)) {
+          counts[result.label] = (counts[result.label] ?? 0) + 1;
+        }
       }
     }
     return counts;
+  }
+
+  // Get healthy count separately
+  int _getHealthyCount() {
+    int count = 0;
+    for (var results in widget.allResults.values) {
+      for (var result in results) {
+        if (result.label.toLowerCase() == 'healthy') {
+          count++;
+        }
+      }
+    }
+    return count;
   }
 
   double _getDiseasePercentage(String disease, Map<String, int> diseaseCounts) {
@@ -262,21 +600,23 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
       }
 
       // Convert disease counts to the format expected by ReviewManager
-      final Map<String, int> diseaseLabelCounts = {};
+      // Count each unique disease type as 1 per report (not per detection)
+      final Set<String> uniqueDiseases = {};
       widget.allResults.values.forEach((results) {
         for (var result in results) {
-          print('DEBUG: Found detection result with label: "${result.label}"');
-          diseaseLabelCounts[result.label] =
-              (diseaseLabelCounts[result.label] ?? 0) + 1;
+          final label = result.label.toLowerCase();
+          if (label != 'tip_burn' && label != 'unknown') {
+            uniqueDiseases.add(result.label);
+          }
         }
       });
-      print('DEBUG: All detected labels: ${diseaseLabelCounts.keys.toList()}');
+      print('DEBUG: All detected labels: ${uniqueDiseases.toList()}');
       final diseaseCounts =
-          diseaseLabelCounts.entries.map((entry) {
+          uniqueDiseases.map((disease) {
             return {
-              'name': _formatLabel(entry.key),
-              'label': entry.key,
-              'count': entry.value,
+              'name': _formatLabel(disease),
+              'label': disease,
+              'count': 1, // Each disease type counts as 1 per report
             };
           }).toList();
 
@@ -413,14 +753,202 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
       case 'powdery_mildew':
         return 'Powdery Mildew';
       case 'tip_burn':
+        return 'Non-disease related';
       case 'unknown':
         return 'Unknown';
+      case 'banana':
+      case 'eggplant':
+      case 'moringa':
+        return 'Non-mango leaf';
       default:
         return label
             .split('_')
             .map((word) => word[0].toUpperCase() + word.substring(1))
             .join(' ');
     }
+  }
+
+
+  String _getDiseaseImagePath(String disease) {
+    final lower = disease.toLowerCase();
+    if (lower.contains('anthracnose')) {
+      return 'assets/replace_disease/anthracnose_image.jpg';
+    } else if (lower.contains('bacterial') || lower.contains('backterial')) {
+      return 'assets/replace_disease/bacterial_image.jpg';
+    } else if (lower.contains('dieback')) {
+      return 'assets/replace_disease/dieback_image.jpg';
+    } else if (lower.contains('powdery')) {
+      return 'assets/replace_disease/powdery_image.jpg';
+    } else {
+      return 'assets/replace_disease/healthy_image.jpg';
+    }
+  }
+
+  Widget _buildDiseaseCard(String name, String imagePath, String diseaseKey) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+        side: BorderSide(color: Colors.green.shade200),
+      ),
+      child: InkWell(
+        onTap: () => _showDiseaseDetails(name, imagePath, diseaseKey),
+        borderRadius: BorderRadius.circular(15),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  imagePath,
+                  width: 100,
+                  height: 80,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDiseaseDetails(String name, String imagePath, String diseaseKey) async {
+    // Load disease info if not already loaded
+    if (_diseaseInfo.isEmpty) {
+      await _loadDiseaseInfo();
+    }
+
+    // Try to find disease info by matching the formatted name (like home page)
+    Map<String, dynamic>? info;
+    
+    // First try exact match with formatted name
+    info = _diseaseInfo[name];
+    
+    // If not found, try case-insensitive match
+    if (info == null) {
+      for (var key in _diseaseInfo.keys) {
+        if (key.toLowerCase() == name.toLowerCase()) {
+          info = _diseaseInfo[key];
+          break;
+        }
+      }
+    }
+    
+    // If still not found, try matching using the disease key variations
+    if (info == null) {
+      final label = diseaseKey.toLowerCase();
+      
+      // Map disease keys to possible Firestore names
+      final Map<String, List<String>> keyToNames = {
+        'anthracnose': ['Anthracnose'],
+        'bacterial_blackspot': ['Bacterial black spot', 'Bacterial Black Spot'],
+        'backterial_blackspot': ['Bacterial black spot', 'Bacterial Black Spot'],
+        'dieback': ['Dieback'],
+        'powdery_mildew': ['Powdery mildew', 'Powdery Mildew'],
+      };
+      
+      final possibleNames = keyToNames[label];
+      if (possibleNames != null) {
+        for (var possibleName in possibleNames) {
+          if (_diseaseInfo.containsKey(possibleName)) {
+            info = _diseaseInfo[possibleName];
+            break;
+          }
+          // Also try case-insensitive
+          for (var key in _diseaseInfo.keys) {
+            if (key.toLowerCase() == possibleName.toLowerCase()) {
+              info = _diseaseInfo[key];
+              break;
+            }
+          }
+          if (info != null) break;
+        }
+      }
+      
+      // If still not found, check special cases
+      if (info == null && specialDiseaseInfo.containsKey(label)) {
+        info = specialDiseaseInfo[label];
+      }
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DiseaseDetailsPage(
+          name: name,
+          imagePath: imagePath.isEmpty ? 'assets/replace_disease/healthy_image.jpg' : imagePath,
+          scientificName: info?['scientificName'] ?? '',
+          details: {
+            'Symptoms': (info?['symptoms'] as List?)?.cast<String>() ?? [],
+            'Treatments': (info?['treatments'] as List?)?.cast<String>() ?? [],
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHealthySection() {
+    final healthyColor = DetectionPainter.diseaseColors['healthy'] ?? Colors.blue;
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: healthyColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.check_circle_outline,
+                color: healthyColor,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                tr('healthy'),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1A1A1A),
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildNoDiseasesMessage() {
@@ -450,155 +978,198 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     );
   }
 
-  Widget _buildDiseaseSummaryCard(
-    String disease,
-    int count,
-    Map<String, int> diseaseCounts,
-  ) {
-    final color = DetectionPainter.diseaseColors[disease] ?? Colors.grey;
-    final percentage = _getDiseasePercentage(disease, diseaseCounts);
-    final isHealthy = disease.toLowerCase() == 'healthy';
-    final isUnknown =
-        disease.toLowerCase() == 'tip_burn' ||
-        disease.toLowerCase() == 'unknown';
+  String _getDistinctDiseaseCountLabel(Map<String, int> diseaseCounts) {
+    // Non-mango leaf classes should be excluded
+    const nonMangoLeafClasses = {'banana', 'eggplant', 'moringa'};
+    const excludedClasses = {'healthy', 'tip_burn', 'unknown', ...nonMangoLeafClasses};
+    
+    final distinct =
+        diseaseCounts.keys.where((d) {
+          final lower = d.toLowerCase();
+          return !excludedClasses.contains(lower);
+        }).length;
+    return '$distinct';
+  }
 
-    return Card(
-      elevation: 4,
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: () {
-          if (isHealthy) {
-            _showHealthyStatus(context);
-          } else if (isUnknown) {
-            _showUnknownStatus(context);
-          } else {
-            _showDiseaseRecommendations(context, disease);
-          }
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withOpacity(0.5)),
+  Widget _buildCombinedDiseaseCard(List<MapEntry<String, int>> sortedDiseases) {
+    final diseaseCounts = _getOverallDiseaseCount();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ...sortedDiseases.asMap().entries.map((entry) {
+            final index = entry.key;
+            final diseaseEntry = entry.value;
+            final disease = diseaseEntry.key;
+            final color = DetectionPainter.diseaseColors[disease] ?? Colors.grey;
+            final isHealthy = disease.toLowerCase() == 'healthy';
+            final isUnknown =
+                disease.toLowerCase() == 'tip_burn' ||
+                disease.toLowerCase() == 'unknown';
+            final isLast = index == sortedDiseases.length - 1;
+
+            return Container(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                index == 0 ? 20 : 16,
+                20,
+                16,
+              ),
+              decoration: BoxDecoration(
+                border: isLast ? null : Border(
+                  bottom: BorderSide(color: Colors.grey[100]!, width: 1),
+                ),
+              ),
+              child: Row(
                 children: [
                   Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Center(
-                      child: Icon(Icons.check_circle, size: 16, color: color),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      _formatLabel(disease),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
                       color: color.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(
-                      tr('found_count', namedArgs: {'count': '$count'}),
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Icon(
+                      isHealthy || isUnknown
+                          ? Icons.check_circle_outline
+                          : Icons.warning_rounded,
+                      color: color,
+                      size: 22,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          tr('percentage_of_total_leaves'),
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 14,
+                          _formatLabel(disease),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF1A1A1A),
+                            letterSpacing: -0.3,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: LinearProgressIndicator(
-                            value: percentage,
-                            backgroundColor: color.withOpacity(0.1),
-                            valueColor: AlwaysStoppedAnimation<Color>(color),
-                            minHeight: 8,
-                          ),
-                        ),
+                        if (!isHealthy && !isUnknown) ...[
+                          const SizedBox(height: 4),
+                          _buildSeverityBadge(disease, diseaseCounts),
+                        ],
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Text(
-                    '${(percentage * 100).toStringAsFixed(1)}%',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+                  if (!isHealthy && !isUnknown)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: ElevatedButton(
+                        onPressed: () {
+                          _showDiseaseDetails(_formatLabel(disease), _getDiseaseImagePath(disease), disease);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          'Recommendation',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
                     Icon(
-                      isHealthy || isUnknown
-                          ? Icons.info_outline
-                          : Icons.medical_services_outlined,
-                      color: color,
+                      Icons.chevron_right,
+                      color: Colors.grey[400],
                       size: 20,
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      isHealthy || isUnknown
-                          ? tr('not_applicable')
-                          : tr('see_recommendation'),
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+                ],
               ),
-            ],
-          ),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
+  // Calculate severity for the 4 main diseases only
+  String _getSeverityLevel(String disease, Map<String, int> diseaseCounts) {
+    // Only calculate for the 4 main diseases
+    const mainDiseases = ['anthracnose', 'backterial_blackspot', 'powdery_mildew', 'dieback'];
+    if (!mainDiseases.contains(disease.toLowerCase())) {
+      return '';
+    }
+
+    // Calculate total of only the 4 diseases (excluding healthy/unknown)
+    int totalDiseaseDetections = 0;
+    for (final d in mainDiseases) {
+      totalDiseaseDetections += diseaseCounts[d.toLowerCase()] ?? 0;
+    }
+
+    if (totalDiseaseDetections == 0) return '';
+
+    final diseaseCount = diseaseCounts[disease] ?? 0;
+    final percentage = (diseaseCount / totalDiseaseDetections * 100);
+
+    if (percentage >= 80) {
+      return 'High';
+    } else if (percentage >= 60) {
+      return 'Medium';
+    } else {
+      return 'Low';
+    }
+  }
+
+  Widget _buildSeverityBadge(String disease, Map<String, int> diseaseCounts) {
+    final severity = _getSeverityLevel(disease, diseaseCounts);
+    if (severity.isEmpty) return const SizedBox.shrink();
+
+    Color severityColor;
+    switch (severity) {
+      case 'High':
+        severityColor = Colors.red;
+        break;
+      case 'Medium':
+        severityColor = Colors.orange;
+        break;
+      case 'Low':
+        severityColor = Colors.green;
+        break;
+      default:
+        severityColor = Colors.grey;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: severityColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: severityColor.withOpacity(0.3), width: 1),
+      ),
+      child: Text(
+        severity,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: severityColor,
         ),
       ),
     );
@@ -908,6 +1479,382 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                   ),
                 ),
           ),
+    );
+  }
+
+  void _showDiseaseCards(
+    BuildContext context,
+    List<MapEntry<String, int>> diseases,
+  ) async {
+    // Load disease info if not already loaded
+    if (_diseaseInfo.isEmpty) {
+      await _loadDiseaseInfo();
+    }
+
+    // If still empty, try loading from cache
+    if (_diseaseInfo.isEmpty) {
+      try {
+        final diseaseBox = await Hive.openBox('diseaseBox');
+        final localDiseaseInfo = diseaseBox.get('diseaseInfo');
+        if (localDiseaseInfo != null && localDiseaseInfo is Map) {
+          _diseaseInfo = Map<String, Map<String, dynamic>>.from(
+            localDiseaseInfo.map(
+              (k, v) =>
+                  MapEntry(k as String, Map<String, dynamic>.from(v as Map)),
+            ),
+          );
+        }
+      } catch (e) {
+        print('DEBUG: Could not load from cache: $e');
+      }
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => SingleChildScrollView(
+          controller: scrollController,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.medical_services_outlined,
+                      color: Colors.green,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        tr('diseases'),
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                ...diseases.map((entry) {
+                  final disease = entry.key;
+                  final diseaseName = _formatLabel(disease);
+                  return _buildDiseaseNameCard(diseaseName, disease);
+                }).toList(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiseaseNameCard(String name, String diseaseKey) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              name,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // Close bottom sheet first
+              _showDiseaseDetails(name, '', diseaseKey);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 0,
+            ),
+            child: const Text('Show More'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAllDiseaseRecommendations(
+    BuildContext context,
+    List<MapEntry<String, int>> diseases,
+  ) async {
+    // Load disease info if not already loaded
+    if (_diseaseInfo.isEmpty) {
+      await _loadDiseaseInfo();
+    }
+
+    // If still empty, try loading from cache
+    if (_diseaseInfo.isEmpty) {
+      try {
+        final diseaseBox = await Hive.openBox('diseaseBox');
+        final localDiseaseInfo = diseaseBox.get('diseaseInfo');
+        if (localDiseaseInfo != null && localDiseaseInfo is Map) {
+          _diseaseInfo = Map<String, Map<String, dynamic>>.from(
+            localDiseaseInfo.map(
+              (k, v) =>
+                  MapEntry(k as String, Map<String, dynamic>.from(v as Map)),
+            ),
+          );
+        }
+      } catch (e) {
+        print('DEBUG: Could not load from cache: $e');
+      }
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => SingleChildScrollView(
+          controller: scrollController,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.medical_services_outlined,
+                      color: Colors.green,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        tr('treatment_and_recommendations'),
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${tr('diseases_detected')}: ${diseases.length}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ...diseases.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final diseaseEntry = entry.value;
+                  final disease = diseaseEntry.key;
+                  final color =
+                      DetectionPainter.diseaseColors[disease] ?? Colors.grey;
+                  final label = disease.toLowerCase();
+
+                  // Get disease info
+                  Map<String, dynamic>? info;
+                  if (specialDiseaseInfo.containsKey(label)) {
+                    info = specialDiseaseInfo[label];
+                  } else {
+                    info = _diseaseInfo[label];
+                    if (info == null) {
+                      final formattedLabel = _formatLabel(label).toLowerCase();
+                      info = _diseaseInfo[formattedLabel];
+                    }
+                  }
+
+                  return Container(
+                    margin: EdgeInsets.only(bottom: index == diseases.length - 1 ? 0 : 24),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: color.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: color.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.warning_rounded,
+                                color: color,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _formatLabel(disease),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        if (info != null) ...[
+                          Text(
+                            tr('symptoms'),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1A1A1A),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ...(info['symptoms'] as List<String>).map<Widget>(
+                            (s) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '• ',
+                                    style: TextStyle(
+                                      color: color,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      s,
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            tr('treatment_and_recommendations'),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1A1A1A),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ...(info['treatments'] as List<String>).map<Widget>(
+                            (t) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '• ',
+                                    style: TextStyle(
+                                      color: color,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      t,
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ] else ...[
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[50],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.orange[200]!),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  color: Colors.orange[700],
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    tr('detailed_info_not_available_for',
+                                        namedArgs: {
+                                          'disease': _formatLabel(disease),
+                                        }),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.orange[700],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1233,19 +2180,22 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
         uploadedImages2.add({'url': downloadUrl, 'path': storagePath});
       }
       // Build diseaseSummary from detection results to power Recent Activity title
-      final Map<String, int> diseaseLabelCounts = {};
+      // Count each unique disease type as 1 per report (not per detection)
+      final Set<String> uniqueDiseases = {};
       widget.allResults.values.forEach((results) {
         for (var result in results) {
-          diseaseLabelCounts[result.label] =
-              (diseaseLabelCounts[result.label] ?? 0) + 1;
+          final label = result.label.toLowerCase();
+          if (label != 'tip_burn' && label != 'unknown') {
+            uniqueDiseases.add(result.label);
+          }
         }
       });
       final diseaseCounts =
-          diseaseLabelCounts.entries.map((entry) {
+          uniqueDiseases.map((disease) {
             return {
-              'name': _formatLabel(entry.key),
-              'label': entry.key,
-              'count': entry.value,
+              'name': _formatLabel(disease),
+              'label': disease,
+              'count': 1, // Each disease type counts as 1 per report
             };
           }).toList();
       for (int i = 0; i < widget.imagePaths.length; i++) {
@@ -1355,7 +2305,6 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
   @override
   Widget build(BuildContext context) {
     final diseaseCounts = _getOverallDiseaseCount();
-    final totalDetections = diseaseCounts.values.fold(0, (a, b) => a + b);
     // Kick off image size loading only when needed (first build), avoid blocking transition
     if (showBoundingBoxes && imageSizes.isEmpty) {
       // Defer loading sizes to next microtask to avoid layout jank
@@ -1426,7 +2375,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    tr('total_leaves'),
+                                    tr('diseases_found'),
                                     style: TextStyle(
                                       color: Colors.grey[600],
                                       fontSize: 14,
@@ -1434,7 +2383,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '$totalDetections',
+                                    _getDistinctDiseaseCountLabel(diseaseCounts),
                                     style: const TextStyle(
                                       fontSize: 24,
                                       fontWeight: FontWeight.bold,
@@ -1481,6 +2430,27 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                       ],
                     ),
                   ),
+                  // Healthy Leaves Section
+                  if (_getHealthyCount() > 0) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: Text(
+                        tr('healthy_leaves'),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      color: Colors.white,
+                      child: _buildHealthySection(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  // Disease Summary Section
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
@@ -1498,17 +2468,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                     child:
                         sortedDiseases.isEmpty
                             ? _buildNoDiseasesMessage()
-                            : Column(
-                              children: [
-                                ...sortedDiseases.map((entry) {
-                                  return _buildDiseaseSummaryCard(
-                                    entry.key,
-                                    entry.value,
-                                    diseaseCounts,
-                                  );
-                                }).toList(),
-                              ],
-                            ),
+                            : _buildCombinedDiseaseCard(sortedDiseases),
                   ),
                   const SizedBox(height: 24),
                 ],
@@ -1531,44 +2491,23 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                     ),
                   ],
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton.icon(
-                          onPressed: _addToTracking,
-                          icon: const Icon(Icons.save),
-                          label: Text(tr('add_to_tracking')),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.grey[700],
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
+                child: SizedBox(
+                  height: 50,
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _hasWarnings() ? null : _sendForExternalReview,
+                    icon: const Icon(Icons.send),
+                    label: Text(tr('send_for_review')),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _hasWarnings() ? Colors.grey : Colors.green,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey[400],
+                      disabledForegroundColor: Colors.white70,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton.icon(
-                          onPressed: _sendForExternalReview,
-                          icon: const Icon(Icons.send),
-                          label: Text(tr('send_for_review')),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               )
               : null,
@@ -1599,17 +2538,26 @@ class _ImageCarouselViewerState extends State<_ImageCarouselViewer> {
   late PageController _pageController;
   late int _currentIndex;
   bool _showControls = true;
+  final Map<int, TransformationController> _transformationControllers = {};
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: widget.initialIndex);
+    // Initialize transformation controllers for all images
+    for (int i = 0; i < widget.imagePaths.length; i++) {
+      _transformationControllers[i] = TransformationController();
+    }
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    // Dispose all transformation controllers
+    for (var controller in _transformationControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -1619,6 +2567,7 @@ class _ImageCarouselViewerState extends State<_ImageCarouselViewer> {
     });
   }
 
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -1627,11 +2576,15 @@ class _ImageCarouselViewerState extends State<_ImageCarouselViewer> {
       child: Stack(
         children: [
           // Full screen image carousel
-          GestureDetector(
-            onTap: _toggleControls,
-            child: PageView.builder(
+          PageView.builder(
               controller: _pageController,
+              physics: const PageScrollPhysics(),
               onPageChanged: (index) {
+                // Reset zoom when changing pages
+                final oldController = _transformationControllers[_currentIndex];
+                if (oldController != null) {
+                  oldController.value = Matrix4.identity();
+                }
                 setState(() {
                   _currentIndex = index;
                 });
@@ -1648,8 +2601,11 @@ class _ImageCarouselViewerState extends State<_ImageCarouselViewer> {
                     // Image layer - always centered
                     Center(
                       child: InteractiveViewer(
+                        transformationController: _transformationControllers[index],
                         minScale: 0.5,
-                        maxScale: 3.0,
+                        maxScale: 5.0,
+                        panEnabled: true,
+                        scaleEnabled: true,
                         child: Image.file(
                           File(imagePath),
                           fit: BoxFit.contain,
@@ -1681,12 +2637,13 @@ class _ImageCarouselViewerState extends State<_ImageCarouselViewer> {
                         ),
                       ),
                     ),
-                    // Bounding boxes overlay - positioned absolutely
+                    // Bounding boxes overlay - positioned absolutely (non-interactive)
                     if (widget.showBoundingBoxes &&
                         results.isNotEmpty &&
                         widget.imageSizes.isNotEmpty)
                       Positioned.fill(
-                        child: LayoutBuilder(
+                        child: IgnorePointer(
+                          child: LayoutBuilder(
                           builder: (context, constraints) {
                             // Calculate the actual displayed image size and position
                             final screenSize = MediaQuery.of(context).size;
@@ -1733,13 +2690,13 @@ class _ImageCarouselViewerState extends State<_ImageCarouselViewer> {
                               size: screenSize,
                             );
                           },
+                          ),
                         ),
                       ),
                   ],
                 );
               },
             ),
-          ),
           // Controls overlay
           if (_showControls) ...[
             // Top controls

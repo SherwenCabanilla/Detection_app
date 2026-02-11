@@ -357,60 +357,8 @@ class DetectionResultCard extends StatelessWidget {
                                 color: Colors.black87,
                               ),
                             ),
-                            if (count != null) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: diseaseColor.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  'x$count',
-                                  style: TextStyle(
-                                    color: diseaseColor,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ],
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        if (percentage != null) ...[
-                          Text(
-                            tr('percentage_of_total_leaves'),
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: LinearProgressIndicator(
-                              value: percentage,
-                              backgroundColor: diseaseColor.withOpacity(0.1),
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                diseaseColor,
-                              ),
-                              minHeight: 8,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${(percentage! * 100).toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: diseaseColor,
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),

@@ -5,8 +5,10 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'tflite_detector.dart';
 import 'detection_painter.dart';
+import 'disease_details_page.dart';
 
 class UserRequestDetail extends StatefulWidget {
   final Map<String, dynamic> request;
@@ -45,10 +47,10 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
   // Check if treatment plan has any content
   bool _hasTreatmentContent(Map<String, dynamic>? treatmentPlan) {
     if (treatmentPlan == null) return false;
-    
+
     final recommendations = treatmentPlan['recommendations'] as List?;
     if (recommendations == null || recommendations.isEmpty) return false;
-    
+
     // Check if any recommendation has actual content
     for (var rec in recommendations) {
       if (rec == null) continue;
@@ -56,30 +58,32 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
       final dosage = rec['dosage']?.toString().trim() ?? '';
       final frequency = rec['frequency']?.toString().trim() ?? '';
       final precautions = rec['precautions']?.toString().trim() ?? '';
-      
-      if (treatment.isNotEmpty || dosage.isNotEmpty || 
-          frequency.isNotEmpty || precautions.isNotEmpty) {
+
+      if (treatment.isNotEmpty ||
+          dosage.isNotEmpty ||
+          frequency.isNotEmpty ||
+          precautions.isNotEmpty) {
         return true;
       }
     }
-    
+
     return false;
   }
 
   // Check if preventive measures has any content
   bool _hasPreventiveMeasures(Map<String, dynamic>? treatmentPlan) {
     if (treatmentPlan == null) return false;
-    
+
     final measures = treatmentPlan['preventiveMeasures'] as List?;
     if (measures == null || measures.isEmpty) return false;
-    
+
     // Check if any measure has actual content
     for (var measure in measures) {
       if (measure?.toString().trim().isNotEmpty ?? false) {
         return true;
       }
     }
-    
+
     return false;
   }
 
@@ -435,136 +439,435 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // User and timestamp info
+            // Consolidated Request Card
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: Card(
-                color: Colors.grey[50],
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 16,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+              padding: const EdgeInsets.all(16),
+              child: Builder(
+                builder: (context) {
+                  final mergedSummary = _mergeDiseaseSummary(diseaseSummary);
+                  final hasHealthy = mergedSummary.any((d) {
+                    final diseaseName =
+                        (d['disease'] ?? d['name'] ?? '')
+                            .toString()
+                            .toLowerCase();
+                    return diseaseName == 'healthy';
+                  });
+
+                  // Filter diseases
+                  final filteredSummary =
+                      mergedSummary.where((d) {
+                        final rawDiseaseName =
+                            (d['disease'] ?? d['name'] ?? '').toString();
+                        final normalizedName =
+                            rawDiseaseName
+                                .toLowerCase()
+                                .replaceAll('_', ' ')
+                                .trim();
+                        const validDiseases = {
+                          'anthracnose',
+                          'bacterial blackspot',
+                          'bacterial_blackspot',
+                          'backterial_blackspot',
+                          'powdery mildew',
+                          'powdery_mildew',
+                          'dieback',
+                        };
+                        final isValidDisease =
+                            validDiseases.contains(normalizedName) ||
+                            validDiseases.contains(
+                              rawDiseaseName.toLowerCase(),
+                            );
+                        final isNonMangoLeaf =
+                            normalizedName == 'banana' ||
+                            normalizedName == 'eggplant' ||
+                            normalizedName == 'moringa';
+                        final isTipBurn =
+                            normalizedName == 'tip burn' ||
+                            normalizedName == 'tip_burn';
+                        final isUnknown = normalizedName == 'unknown';
+                        final isHealthy = normalizedName == 'healthy';
+                        return isValidDisease &&
+                            !isNonMangoLeaf &&
+                            !isTipBurn &&
+                            !isUnknown &&
+                            !isHealthy;
+                      }).toList();
+
+                  final sortedSummary = [...filteredSummary]..sort((a, b) {
+                    final countA = a['count'] as int? ?? 0;
+                    final countB = b['count'] as int? ?? 0;
+                    return countB.compareTo(countA);
+                  });
+
+                  return Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
-                            Icons.person,
-                            size: 18,
-                            color: Colors.green,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              tr('your_request'),
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.green,
+                          // Your Request Section
+                          Row(
+                            children: [
+                              Icon(Icons.person, color: Colors.green, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Your Request',
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color:
+                          const SizedBox(height: 12),
+                          // Submission date and status badge
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.access_time,
+                                size: 18,
+                                color: Colors.grey[700],
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  formattedDate,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      isCompleted
+                                          ? Colors.green.withOpacity(0.1)
+                                          : Colors.orange.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
                                   isCompleted
-                                      ? Colors.green.withOpacity(0.1)
-                                      : Colors.orange.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color:
-                                    isCompleted
-                                        ? Colors.green.withOpacity(0.3)
-                                        : Colors.orange.withOpacity(0.3),
+                                      ? tr('completed')
+                                      : (status == 'tracking'
+                                          ? tr('tracking')
+                                          : (status == 'pending_review'
+                                              ? tr('pending_review')
+                                              : tr('pending'))),
+                                  style: TextStyle(
+                                    color:
+                                        isCompleted
+                                            ? Colors.green
+                                            : Colors.orange,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ),
-                            ),
-                            child: Text(
-                              isCompleted
-                                  ? tr('completed')
-                                  : (status == 'tracking'
-                                      ? tr('tracking')
-                                      : (status == 'pending_review'
-                                          ? tr('pending_review')
-                                          : tr('pending'))),
-                              style: TextStyle(
-                                color:
-                                    isCompleted ? Colors.green : Colors.orange,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                              ),
-                            ),
+                            ],
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.schedule,
-                            size: 16,
-                            color: Colors.grey,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            tr('submitted'),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.black54,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            formattedDate,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (isCompleted && reviewedAt.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.check_circle,
-                              size: 16,
-                              color: Colors.green,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              tr('reviewed'),
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.black54,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              formattedReviewedDate,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.green,
-                              ),
+                          if (isCompleted && reviewedAt.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.check_circle,
+                                  size: 18,
+                                  color: Colors.green,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Reviewed: $formattedReviewedDate',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
+                          // Divider
+                          if (hasHealthy ||
+                              sortedSummary.isNotEmpty ||
+                              (isCompleted &&
+                                  expertReview != null &&
+                                  (expertReview['healthStatus'] != null ||
+                                      (expertReview['comment'] != null &&
+                                          expertReview['comment']
+                                              .toString()
+                                              .trim()
+                                              .isNotEmpty))))
+                            const Divider(height: 24),
+                          // Healthy (if any)
+                          if (hasHealthy) ...[
+                            Row(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: (DetectionPainter
+                                                .diseaseColors['healthy'] ??
+                                            Colors.blue)
+                                        .withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    Icons.check_circle_outline,
+                                    color:
+                                        DetectionPainter
+                                            .diseaseColors['healthy'] ??
+                                        Colors.blue,
+                                    size: 22,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Text(
+                                    tr('healthy'),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF1A1A1A),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (sortedSummary.isNotEmpty)
+                              const Divider(height: 16),
+                          ],
+                          // Diseases
+                          ...sortedSummary.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final disease = entry.value;
+                            final rawDiseaseName =
+                                (disease['disease'] ??
+                                        disease['name'] ??
+                                        'Unknown')
+                                    .toString();
+                            final color = _getExpertDiseaseColor(
+                              rawDiseaseName,
+                            );
+                            final isLast = index == sortedSummary.length - 1;
+
+                            return Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: color.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.warning_rounded,
+                                        color: color,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Text(
+                                        _formatExpertLabel(rawDiseaseName),
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFF1A1A1A),
+                                        ),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        _showDiseaseDetails(
+                                          _formatExpertLabel(rawDiseaseName),
+                                          _getDiseaseImagePath(rawDiseaseName),
+                                          rawDiseaseName,
+                                        );
+                                      },
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.green,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 4,
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Recommendation',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (!isLast) const Divider(height: 16),
+                              ],
+                            );
+                          }).toList(),
+                          // Divider before reviewer info
+                          if (isCompleted &&
+                              expertReview != null &&
+                              (expertReview['healthStatus'] != null ||
+                                  (expertReview['comment'] != null &&
+                                      expertReview['comment']
+                                          .toString()
+                                          .trim()
+                                          .isNotEmpty)))
+                            const Divider(height: 24),
+                          // Reviewed by and Health Status
+                          if (isCompleted &&
+                              expertReview != null &&
+                              expertName.isNotEmpty) ...[
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.person,
+                                  size: 18,
+                                  color: Colors.green,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    tr(
+                                      'reviewed_by',
+                                      namedArgs: {
+                                        'name':
+                                            expertName.isNotEmpty
+                                                ? expertName
+                                                : 'Expert',
+                                      },
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.green,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (isCompleted &&
+                              expertReview != null &&
+                              expertReview['healthStatus'] != null) ...[
+                            if (isCompleted &&
+                                expertReview != null &&
+                                expertName.isNotEmpty)
+                              const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(
+                                  expertReview['healthStatus'] == 'healthy'
+                                      ? Icons.check_circle
+                                      : Icons.warning,
+                                  size: 18,
+                                  color:
+                                      expertReview['healthStatus'] == 'healthy'
+                                          ? Colors.green
+                                          : Colors.orange,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'health_status: ${expertReview['healthStatus'] == 'healthy' ? 'Healthy' : 'Not Healthy'}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color:
+                                          expertReview['healthStatus'] ==
+                                                  'healthy'
+                                              ? Colors.green
+                                              : Colors.orange,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            // Additional Treatment Plan (if completed and has comment)
+            if (isCompleted &&
+                expertReview != null &&
+                expertReview['comment'] != null &&
+                expertReview['comment'].toString().trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Additional Treatment Plan',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF424242),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          expertReview['comment'],
+                          style: const TextStyle(
+                            fontSize: 15,
+                            color: Colors.black87,
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (!isCompleted)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Card(
+                  color: Colors.orange[50],
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.schedule,
+                          color: Colors.orange[700],
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            tr('awaiting_expert_review'),
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.orange[800],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
             // Images Grid
             if (images.isNotEmpty)
               Padding(
@@ -1370,452 +1673,6 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
                   ],
                 ),
               ),
-            // Disease Summary
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Builder(
-                builder: (context) {
-                  final mergedSummary = _mergeDiseaseSummary(diseaseSummary);
-                  final totalLeaves = mergedSummary.fold<int>(
-                    0,
-                    (sum, d) => sum + (d['count'] as int? ?? 0),
-                  );
-                  final sortedSummary = [...mergedSummary]..sort((a, b) {
-                    final percA =
-                        totalLeaves == 0
-                            ? 0.0
-                            : (a['count'] as int? ?? 0) / totalLeaves;
-                    final percB =
-                        totalLeaves == 0
-                            ? 0.0
-                            : (b['count'] as int? ?? 0) / totalLeaves;
-                    return percB.compareTo(percA);
-                  });
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tr('disease_summary'),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      ...sortedSummary.map<Widget>((disease) {
-                        final diseaseName =
-                            (disease['disease'] ?? disease['name'] ?? 'Unknown')
-                                .toString();
-                        final count = disease['count'] ?? 0;
-                        final percentage =
-                            totalLeaves == 0 ? 0.0 : count / totalLeaves;
-                        final color = _getExpertDiseaseColor(diseaseName);
-                        final isHealthy =
-                            diseaseName.toLowerCase() == 'healthy';
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 24,
-                                      height: 24,
-                                      decoration: BoxDecoration(
-                                        color: color.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Center(
-                                        child: Icon(
-                                          isHealthy
-                                              ? Icons.check_circle
-                                              : Icons.local_florist,
-                                          size: 16,
-                                          color: color,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        _formatExpertLabel(diseaseName),
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: color.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: Text(
-                                        tr(
-                                          'found_count',
-                                          namedArgs: {'count': '$count'},
-                                        ),
-                                        style: TextStyle(
-                                          color: color,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            tr('percentage_of_total_leaves'),
-                                            style: TextStyle(
-                                              color: Colors.grey[600],
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          ClipRRect(
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                            child: LinearProgressIndicator(
-                                              value: percentage,
-                                              backgroundColor: color
-                                                  .withOpacity(0.1),
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                    color,
-                                                  ),
-                                              minHeight: 8,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      '${(percentage * 100).toStringAsFixed(1)}%',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: color,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ],
-                  );
-                },
-              ),
-            ),
-            // Expert Review Section
-            if (isCompleted && expertReview != null)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.person, color: Colors.green, size: 18),
-                        const SizedBox(width: 6),
-                        Text(
-                          tr(
-                            'reviewed_by',
-                            namedArgs: {
-                              'name':
-                                  expertName.isNotEmpty ? expertName : 'Expert',
-                            },
-                          ),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.green,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      tr('expert_review'),
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Severity Assessment
-                    if (expertReview['severityAssessment'] != null)
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                tr('severity_assessment'),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.warning,
-                                    color: _getSeverityColor(
-                                      expertReview['severityAssessment']['level'] ??
-                                          'low',
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    _formatSeverityLevel(
-                                      (expertReview['severityAssessment']['level'] ??
-                                              'low')
-                                          .toString(),
-                                    ),
-                                    style: TextStyle(
-                                      color: _getSeverityColor(
-                                        expertReview['severityAssessment']['level'] ??
-                                            'low',
-                                      ),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                    // Treatment Plan (only show if has content)
-                    if (_hasTreatmentContent(expertReview['treatmentPlan']))
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                tr('treatment_plan'),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              ...((expertReview['treatmentPlan']['recommendations']
-                                          as List?) ??
-                                      [])
-                                  .map<Widget>((treatment) {
-                                    return Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        if (treatment['treatment'] != null &&
-                                            treatment['treatment']
-                                                .toString()
-                                                .trim()
-                                                .isNotEmpty)
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 4,
-                                            ),
-                                            child: Text(
-                                              '${tr('treatment')} ${treatment['treatment']}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ),
-                                        if (treatment['dosage'] != null &&
-                                            treatment['dosage']
-                                                .toString()
-                                                .trim()
-                                                .isNotEmpty)
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 4,
-                                            ),
-                                            child: Text(
-                                              '${tr('dosage')} ${treatment['dosage']}',
-                                            ),
-                                          ),
-                                        if (treatment['frequency'] != null &&
-                                            treatment['frequency']
-                                                .toString()
-                                                .trim()
-                                                .isNotEmpty)
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 4,
-                                            ),
-                                            child: Text(
-                                              '${tr('frequency')} ${treatment['frequency']}',
-                                            ),
-                                          ),
-                                        if (treatment['precautions'] != null &&
-                                            treatment['precautions']
-                                                .toString()
-                                                .trim()
-                                                .isNotEmpty)
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 4,
-                                            ),
-                                            child: Text(
-                                              '${tr('precautions')} ${treatment['precautions']}',
-                                            ),
-                                          ),
-                                        const SizedBox(height: 8),
-                                      ],
-                                    );
-                                  })
-                                  .toList(),
-                            ],
-                          ),
-                        ),
-                      ),
-                    if (_hasTreatmentContent(expertReview['treatmentPlan']))
-                      const SizedBox(height: 16),
-                    // Preventive Measures (only show if has content)
-                    if (_hasPreventiveMeasures(expertReview['treatmentPlan']))
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                tr('preventive_measures'),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children:
-                                    ((expertReview['treatmentPlan']['preventiveMeasures']
-                                                as List?) ??
-                                            [])
-                                        .map<Widget>((measure) {
-                                          return Chip(
-                                            label: Text(
-                                              _translatePreventiveMeasure(
-                                                measure.toString(),
-                                              ),
-                                            ),
-                                            backgroundColor: Colors.green
-                                                .withOpacity(0.1),
-                                          );
-                                        })
-                                        .toList(),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    if (_hasPreventiveMeasures(expertReview['treatmentPlan']))
-                      const SizedBox(height: 16),
-                    // Info message if both treatment and preventive measures are empty
-                    if (!_hasTreatmentContent(expertReview['treatmentPlan']) &&
-                        !_hasPreventiveMeasures(expertReview['treatmentPlan']))
-                      Card(
-                        color: Colors.blue.shade50,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.info_outline,
-                                color: Colors.blue.shade700,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  tr('no_treatment_details_note'),
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.blue.shade900,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    if (!_hasTreatmentContent(expertReview['treatmentPlan']) &&
-                        !_hasPreventiveMeasures(expertReview['treatmentPlan']))
-                      const SizedBox(height: 16),
-                    // Expert Comment
-                    if (expertReview['comment'] != null)
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                tr('expert_comment'),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                expertReview['comment'],
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              )
-            else if (!isCompleted)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Center(
-                  child: Text(
-                    tr('awaiting_expert_review'),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.orange,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -1848,6 +1705,30 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
     }
   }
 
+  Widget _buildInfoRow(
+    IconData icon,
+    String label,
+    String value, {
+    Color? color,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: color ?? Colors.grey[600]),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value.isEmpty ? label : '$label $value',
+            style: TextStyle(
+              fontSize: 14,
+              color: color ?? Colors.grey[800],
+              fontWeight: value.isEmpty ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Color _getExpertDiseaseColor(String diseaseName) {
     switch (diseaseName.toLowerCase()) {
       case 'anthracnose':
@@ -1869,6 +1750,58 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
       default:
         return Colors.grey;
     }
+  }
+
+  Widget _buildHealthySection() {
+    final healthyColor =
+        DetectionPainter.diseaseColors['healthy'] ?? Colors.blue;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: healthyColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.check_circle_outline,
+                color: healthyColor,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                tr('healthy'),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1A1A1A),
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   List<Map<String, dynamic>> _mergeDiseaseSummary(List<dynamic> summary) {
@@ -1993,5 +1926,591 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
             .map((word) => word[0].toUpperCase() + word.substring(1))
             .join(' ');
     }
+  }
+
+  String _getDiseaseImagePath(String disease) {
+    final lower = disease.toLowerCase();
+    if (lower.contains('anthracnose')) {
+      return 'assets/replace_disease/anthracnose_image.jpg';
+    } else if (lower.contains('bacterial') || lower.contains('backterial')) {
+      return 'assets/replace_disease/bacterial_image.jpg';
+    } else if (lower.contains('dieback')) {
+      return 'assets/replace_disease/dieback_image.jpg';
+    } else if (lower.contains('powdery')) {
+      return 'assets/replace_disease/powdery_image.jpg';
+    } else {
+      return 'assets/replace_disease/healthy_image.jpg';
+    }
+  }
+
+  Widget _buildDiseaseCard(String name, String imagePath, String diseaseKey) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+        side: BorderSide(color: Colors.green.shade200),
+      ),
+      child: InkWell(
+        onTap: () => _showDiseaseDetails(name, imagePath, diseaseKey),
+        borderRadius: BorderRadius.circular(15),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  imagePath,
+                  width: 100,
+                  height: 80,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiseaseNameCard(String name, String diseaseKey) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              name,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+            ),
+          ),
+          const SizedBox(width: 12),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // Close bottom sheet first
+              _showDiseaseDetails(name, '', diseaseKey);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 0,
+            ),
+            child: const Text('Show More'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDiseaseDetails(
+    String name,
+    String imagePath,
+    String diseaseKey,
+  ) async {
+    // Load disease info if not already loaded
+    if (_diseaseInfo.isEmpty) {
+      await _loadDiseaseInfo();
+    }
+
+    // Try to find disease info by matching the formatted name (like home page)
+    Map<String, dynamic>? info;
+
+    // First try exact match with formatted name
+    info = _diseaseInfo[name];
+
+    // If not found, try case-insensitive match
+    if (info == null) {
+      for (var key in _diseaseInfo.keys) {
+        if (key.toLowerCase() == name.toLowerCase()) {
+          info = _diseaseInfo[key];
+          break;
+        }
+      }
+    }
+
+    // If still not found, check special cases
+    if (info == null) {
+      final label = diseaseKey.toLowerCase();
+      if (specialDiseaseInfo.containsKey(label)) {
+        info = specialDiseaseInfo[label];
+      }
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (context) => DiseaseDetailsPage(
+              name: name,
+              imagePath:
+                  imagePath.isNotEmpty
+                      ? imagePath
+                      : _getDiseaseImagePath(diseaseKey),
+              scientificName: info?['scientificName'] ?? '',
+              details: {
+                'Symptoms': (info?['symptoms'] as List?)?.cast<String>() ?? [],
+                'Treatments':
+                    (info?['treatments'] as List?)?.cast<String>() ?? [],
+              },
+            ),
+      ),
+    );
+  }
+
+  // Special cases for diseases not in Firestore
+  static const Map<String, Map<String, dynamic>> specialDiseaseInfo = {
+    'healthy': {
+      'symptoms': [
+        'Vibrant green leaves without spots or lesions',
+        'Normal growth pattern',
+        'No visible signs of disease or pest damage',
+      ],
+      'treatments': [
+        'Regular monitoring for early detection of problems',
+        'Maintain proper irrigation and fertilization',
+        'Practice good orchard sanitation',
+      ],
+    },
+    'tip_burn': {
+      'symptoms': ['N/A.'],
+      'treatments': ['N/A.'],
+    },
+    'unknown': {
+      'symptoms': ['N/A.'],
+      'treatments': ['N/A.'],
+    },
+  };
+
+  Map<String, Map<String, dynamic>> _diseaseInfo = {};
+
+  Future<void> _loadDiseaseInfo() async {
+    final diseaseBox = await Hive.openBox('diseaseBox');
+    // Try to load from local storage first
+    final localDiseaseInfo = diseaseBox.get('diseaseInfo');
+    if (localDiseaseInfo != null && localDiseaseInfo is Map) {
+      setState(() {
+        _diseaseInfo = Map<String, Map<String, dynamic>>.from(
+          (localDiseaseInfo as Map).map(
+            (k, v) =>
+                MapEntry(k as String, Map<String, dynamic>.from(v as Map)),
+          ),
+        );
+      });
+    }
+    // Always try to fetch latest from Firestore
+    try {
+      final snapshot =
+          await FirebaseFirestore.instance.collection('diseases').get();
+      final Map<String, Map<String, dynamic>> fetched = {};
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final name = data['name'] ?? '';
+        if (name.isNotEmpty) {
+          fetched[name] = {
+            'scientificName': data['scientificName'] ?? '',
+            'symptoms': List<String>.from(data['symptoms'] ?? []),
+            'treatments': List<String>.from(data['treatments'] ?? []),
+          };
+        }
+      }
+      if (fetched.isNotEmpty) {
+        setState(() {
+          _diseaseInfo = fetched;
+        });
+        await diseaseBox.put('diseaseInfo', fetched);
+      }
+    } catch (e) {
+      print('Error fetching disease info: $e');
+    }
+  }
+
+  void _showDiseaseCards(
+    BuildContext context,
+    List<Map<String, dynamic>> diseases,
+  ) async {
+    // Load disease info if not already loaded
+    if (_diseaseInfo.isEmpty) {
+      await _loadDiseaseInfo();
+    }
+
+    // If still empty, try loading from cache
+    if (_diseaseInfo.isEmpty) {
+      try {
+        final diseaseBox = await Hive.openBox('diseaseBox');
+        final localDiseaseInfo = diseaseBox.get('diseaseInfo');
+        if (localDiseaseInfo != null && localDiseaseInfo is Map) {
+          _diseaseInfo = Map<String, Map<String, dynamic>>.from(
+            localDiseaseInfo.map(
+              (k, v) =>
+                  MapEntry(k as String, Map<String, dynamic>.from(v as Map)),
+            ),
+          );
+        }
+      } catch (e) {
+        print('DEBUG: Could not load from cache: $e');
+      }
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder:
+          (context) => DraggableScrollableSheet(
+            initialChildSize: 0.7,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            expand: false,
+            builder:
+                (context, scrollController) => SingleChildScrollView(
+                  controller: scrollController,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.medical_services_outlined,
+                              color: Colors.green,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                tr('diseases'),
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        ...diseases.map((disease) {
+                          final diseaseName =
+                              (disease['disease'] ??
+                                      disease['name'] ??
+                                      'Unknown')
+                                  .toString();
+                          final formattedName = _formatExpertLabel(diseaseName);
+                          return _buildDiseaseNameCard(
+                            formattedName,
+                            diseaseName,
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                  ),
+                ),
+          ),
+    );
+  }
+
+  void _showAllDiseaseRecommendations(
+    BuildContext context,
+    List<Map<String, dynamic>> diseases,
+  ) async {
+    // Load disease info if not already loaded
+    if (_diseaseInfo.isEmpty) {
+      await _loadDiseaseInfo();
+    }
+
+    // If still empty, try loading from cache
+    if (_diseaseInfo.isEmpty) {
+      try {
+        final diseaseBox = await Hive.openBox('diseaseBox');
+        final localDiseaseInfo = diseaseBox.get('diseaseInfo');
+        if (localDiseaseInfo != null && localDiseaseInfo is Map) {
+          _diseaseInfo = Map<String, Map<String, dynamic>>.from(
+            localDiseaseInfo.map(
+              (k, v) =>
+                  MapEntry(k as String, Map<String, dynamic>.from(v as Map)),
+            ),
+          );
+        }
+      } catch (e) {
+        print('DEBUG: Could not load from cache: $e');
+      }
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder:
+          (context) => DraggableScrollableSheet(
+            initialChildSize: 0.85,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            expand: false,
+            builder:
+                (context, scrollController) => SingleChildScrollView(
+                  controller: scrollController,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.medical_services_outlined,
+                              color: Colors.green,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                tr('treatment_and_recommendations'),
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${tr('diseases_detected')}: ${diseases.length}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        ...diseases.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final disease = entry.value;
+                          final diseaseName =
+                              (disease['disease'] ??
+                                      disease['name'] ??
+                                      'Unknown')
+                                  .toString();
+                          final color = _getExpertDiseaseColor(diseaseName);
+                          final label = diseaseName.toLowerCase();
+
+                          // Get disease info
+                          Map<String, dynamic>? info;
+                          if (specialDiseaseInfo.containsKey(label)) {
+                            info = specialDiseaseInfo[label];
+                          } else {
+                            info = _diseaseInfo[label];
+                            if (info == null) {
+                              final formattedLabel =
+                                  _formatExpertLabel(label).toLowerCase();
+                              info = _diseaseInfo[formattedLabel];
+                            }
+                          }
+
+                          return Container(
+                            margin: EdgeInsets.only(
+                              bottom: index == diseases.length - 1 ? 0 : 24,
+                            ),
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[50],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: color.withOpacity(0.3)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: color.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(
+                                        Icons.local_florist,
+                                        color: color,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        _formatExpertLabel(diseaseName),
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                if (info != null) ...[
+                                  Text(
+                                    tr('symptoms'),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1A1A1A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ...(info['symptoms'] as List<String>)
+                                      .map<Widget>(
+                                        (s) => Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 6,
+                                          ),
+                                          child: Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                '• ',
+                                                style: TextStyle(
+                                                  color: color,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              Expanded(
+                                                child: Text(
+                                                  s,
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    tr('treatment_and_recommendations'),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1A1A1A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ...(info['treatments'] as List<String>)
+                                      .map<Widget>(
+                                        (t) => Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 6,
+                                          ),
+                                          child: Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                '• ',
+                                                style: TextStyle(
+                                                  color: color,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              Expanded(
+                                                child: Text(
+                                                  t,
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                ] else ...[
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange[50],
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: Colors.orange[200]!,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.info_outline,
+                                          color: Colors.orange[700],
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            tr(
+                                              'detailed_info_not_available_for',
+                                              namedArgs: {
+                                                'disease': _formatExpertLabel(
+                                                  diseaseName,
+                                                ),
+                                              },
+                                            ),
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.orange[700],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                  ),
+                ),
+          ),
+    );
   }
 }

@@ -21,14 +21,9 @@ class ScanRequestDetail extends StatefulWidget {
 
 class _ScanRequestDetailState extends State<ScanRequestDetail> {
   final TextEditingController _commentController = TextEditingController();
-  final TextEditingController _treatmentController = TextEditingController();
-  final TextEditingController _dosageController = TextEditingController();
-  final TextEditingController _frequencyController = TextEditingController();
-  final TextEditingController _precautionsController = TextEditingController();
-  final TextEditingController _durationController = TextEditingController();
   bool _isSubmitting = false;
   bool _showBoundingBoxes = true;
-  String _selectedSeverity = 'medium';
+  String? _selectedHealthStatus; // 'healthy' or 'not_healthy'
   Timer? _heartbeatTimer;
 
   // Disease information loaded from Firestore (kept for potential future use)
@@ -98,18 +93,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
     }
   }
 
-  List<String> _selectedPreventiveMeasures = [];
   bool _isEditing = false;
-
-  final List<String> _preventiveMeasures = [
-    'Regular pruning',
-    'Proper spacing between plants',
-    'Adequate ventilation',
-    'Regular watering',
-    'Proper fertilization',
-    'Pest monitoring',
-    'Soil testing',
-  ];
 
   @override
   void dispose() {
@@ -117,11 +101,6 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
     // Release claim synchronously (fire and forget)
     _releaseReportClaimSync();
     _commentController.dispose();
-    _treatmentController.dispose();
-    _dosageController.dispose();
-    _frequencyController.dispose();
-    _precautionsController.dispose();
-    _durationController.dispose();
     super.dispose();
   }
 
@@ -253,10 +232,10 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
 
   void _submitReview() async {
     // Validate required fields
-    if (_commentController.text.isEmpty) {
+    if (_selectedHealthStatus == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please fill in the required field: Expert Comment'),
+          content: Text('Please select a health status'),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 3),
         ),
@@ -281,23 +260,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
 
     final expertReview = {
       'comment': _commentController.text,
-      'severityAssessment': {
-        'level': _selectedSeverity,
-        'confidence': widget.request['diseaseSummary'][0]['averageConfidence'],
-        'notes': 'Expert assessment based on image analysis',
-      },
-      'treatmentPlan': {
-        'recommendations': [
-          {
-            'treatment': _treatmentController.text,
-            'dosage': _dosageController.text,
-            'frequency': _frequencyController.text,
-            'duration': _durationController.text,
-          },
-        ],
-        'precautions': _precautionsController.text,
-        'preventiveMeasures': _selectedPreventiveMeasures,
-      },
+      'healthStatus': _selectedHealthStatus,
       'expertName': expertName,
       'expertUid': user.uid,
     };
@@ -361,22 +324,8 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
       // Initialize form with existing review data
       final review = widget.request['expertReview'];
       if (review != null) {
-        _selectedSeverity = review['severityAssessment']?['level'] ?? 'medium';
+        _selectedHealthStatus = review['healthStatus'] ?? null;
         _commentController.text = review['comment'] ?? '';
-
-        final recommendations =
-            review['treatmentPlan']?['recommendations'] as List?;
-        if (recommendations != null && recommendations.isNotEmpty) {
-          final treatment = recommendations[0];
-          _treatmentController.text = treatment['treatment'] ?? '';
-          _dosageController.text = treatment['dosage'] ?? '';
-          _frequencyController.text = treatment['frequency'] ?? '';
-          _precautionsController.text = treatment['precautions'] ?? '';
-        }
-
-        _selectedPreventiveMeasures = List<String>.from(
-          review['treatmentPlan']?['preventiveMeasures'] ?? [],
-        );
       }
     });
   }
@@ -387,22 +336,8 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
       // Reset form to original values
       final review = widget.request['expertReview'];
       if (review != null) {
-        _selectedSeverity = review['severityAssessment']?['level'] ?? 'medium';
+        _selectedHealthStatus = review['healthStatus'] ?? null;
         _commentController.text = review['comment'] ?? '';
-
-        final recommendations =
-            review['treatmentPlan']?['recommendations'] as List?;
-        if (recommendations != null && recommendations.isNotEmpty) {
-          final treatment = recommendations[0];
-          _treatmentController.text = treatment['treatment'] ?? '';
-          _dosageController.text = treatment['dosage'] ?? '';
-          _frequencyController.text = treatment['frequency'] ?? '';
-          _precautionsController.text = treatment['precautions'] ?? '';
-        }
-
-        _selectedPreventiveMeasures = List<String>.from(
-          review['treatmentPlan']?['preventiveMeasures'] ?? [],
-        );
       }
     });
   }
@@ -951,196 +886,178 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
   Widget _buildDiseaseSummary() {
     final rawSummary = widget.request['diseaseSummary'] as List<dynamic>? ?? [];
     final diseaseSummary = _mergeDiseaseSummary(rawSummary);
-    final totalLeaves = diseaseSummary.fold<int>(
-      0,
-      (sum, disease) => sum + (disease['count'] as int? ?? 0),
-    );
-
-    // Sort diseases by percentage in descending order
-    final sortedDiseases =
-        diseaseSummary.toList()..sort((a, b) {
-          final percentageA =
-              (a['count'] as int? ?? 0) / (totalLeaves == 0 ? 1 : totalLeaves);
-          final percentageB =
-              (b['count'] as int? ?? 0) / (totalLeaves == 0 ? 1 : totalLeaves);
-          return percentageB.compareTo(percentageA);
-        });
-
-    // Filter out healthy and unknown detections
-    final actualDiseases =
-        sortedDiseases.where((d) {
-          final disease = d['disease']?.toString() ?? '';
-          final isHealthy = disease.toLowerCase() == 'healthy';
-          final isUnknown = _isUnknownDetection(disease);
-          return !isHealthy && !isUnknown;
-        }).toList();
-
+    
+    // Check if there's healthy
+    final hasHealthy = diseaseSummary.any((d) {
+      final diseaseName = (d['disease'] ?? d['name'] ?? '').toString().toLowerCase();
+      return diseaseName == 'healthy';
+    });
+    
+    // Filter out healthy, tip_burn, unknown, and non-mango leaf classes
+    final filteredSummary = diseaseSummary.where((d) {
+      final rawDiseaseName = (d['disease'] ?? d['name'] ?? '').toString();
+      final normalizedName = rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
+      
+      // Valid mango leaf diseases only
+      const validDiseases = {
+        'anthracnose',
+        'bacterial blackspot',
+        'bacterial_blackspot',
+        'backterial_blackspot',
+        'powdery mildew',
+        'powdery_mildew',
+        'dieback',
+      };
+      
+      // Check if it's a valid disease
+      final isValidDisease = validDiseases.contains(normalizedName) ||
+                            validDiseases.contains(rawDiseaseName.toLowerCase());
+      
+      // Exclude non-mango leaf, tip_burn, unknown, and healthy
+      final isNonMangoLeaf = normalizedName == 'banana' ||
+                            normalizedName == 'eggplant' ||
+                            normalizedName == 'moringa';
+      final isTipBurn = normalizedName == 'tip burn' ||
+                       normalizedName == 'tip_burn';
+      final isUnknown = normalizedName == 'unknown';
+      final isHealthy = normalizedName == 'healthy';
+      
+      return isValidDisease && !isNonMangoLeaf && !isTipBurn && !isUnknown && !isHealthy;
+    }).toList();
+    
+    // Sort by count
+    final sortedDiseases = [...filteredSummary]..sort((a, b) {
+      final countA = a['count'] as int? ?? 0;
+      final countB = b['count'] as int? ?? 0;
+      return countB.compareTo(countA);
+    });
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Detection Summary',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        // Healthy Leaves Section (if any)
+        if (hasHealthy) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+            child: Text(
+              'Healthy Leaves',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.white,
+            child: _buildHealthySection(),
+          ),
+          const SizedBox(height: 16),
+        ],
+        // Disease Summary
+        Text(
+          'Disease Summary',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[800],
+          ),
         ),
         const SizedBox(height: 16),
-        // Compact table view
-        Card(
-          child: Column(
-            children: [
-              // Table header
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(12),
-                    topRight: Radius.circular(12),
+        if (sortedDiseases.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle_outline, color: Colors.grey[600], size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'No diseases detected',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        'Disease',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 1,
-                      child: Text(
-                        'Count',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[700],
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    Expanded(
-                      flex: 1,
-                      child: Text(
-                        '%',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[700],
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Table rows
-              ...sortedDiseases.map((disease) {
-                final rawDiseaseName =
-                    disease['disease']?.toString() ?? 'Unknown';
-                final isUnknown = _isUnknownDetection(rawDiseaseName);
-                final diseaseName =
-                    isUnknown ? 'Unknown' : _formatExpertLabel(rawDiseaseName);
+              ],
+            ),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.white,
+            child: Column(
+              children: sortedDiseases.asMap().entries.map((entry) {
+                final index = entry.key;
+                final disease = entry.value;
+                final rawDiseaseName = (disease['disease'] ?? disease['name'] ?? 'Unknown').toString();
                 final color = _getDiseaseColor(rawDiseaseName);
-                final count = disease['count'] as int? ?? 0;
-                final percentage = totalLeaves == 0 ? 0.0 : count / totalLeaves;
+                final isLast = index == sortedDiseases.length - 1;
 
                 return Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: Colors.grey[200]!),
-                    ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
                   ),
-                  child: InkWell(
-                    onTap:
-                        () => _showDetectionDetails(
-                          context,
-                          rawDiseaseName,
-                          count,
+                  decoration: BoxDecoration(
+                    border: isLast
+                        ? null
+                        : Border(
+                            bottom: BorderSide(
+                              color: Colors.grey[100]!,
+                              width: 1,
+                            ),
+                          ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
+                        child: Icon(
+                          Icons.warning_rounded,
+                          color: color,
+                          size: 22,
+                        ),
                       ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: color,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    diseaseName,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          _formatExpertLabel(rawDiseaseName),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF1A1A1A),
+                            letterSpacing: -0.3,
                           ),
-                          Expanded(
-                            flex: 1,
-                            child: Text(
-                              '$count',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: color,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 1,
-                            child: Text(
-                              '${(percentage * 100).toStringAsFixed(1)}%',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 );
               }).toList(),
-            ],
+            ),
           ),
-        ),
         const SizedBox(height: 16),
         // Summary statistics
         Row(
           children: [
             Expanded(
               child: _buildStatCard(
-                'Total Detections',
-                '$totalLeaves',
-                Icons.analytics,
-                Colors.blue,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildStatCard(
                 'Diseases Found',
-                '${actualDiseases.length}',
+                '${sortedDiseases.length}',
                 Icons.warning,
                 Colors.orange,
               ),
@@ -1157,6 +1074,57 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildHealthySection() {
+    final healthyColor = DetectionPainter.diseaseColors['healthy'] ?? Colors.blue;
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: healthyColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.check_circle_outline,
+                color: healthyColor,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                'Healthy',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1A1A1A),
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1545,7 +1513,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
-        // Severity Assessment
+        // Health Status Selection
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -1553,37 +1521,121 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Severity Assessment',
+                  'Choose health Status *',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: _selectedSeverity,
-                  decoration: const InputDecoration(
-                    labelText: 'Select Severity Level',
-                    border: OutlineInputBorder(),
-                  ),
-                  items:
-                      ['low', 'medium', 'high']
-                          .map(
-                            (level) => DropdownMenuItem(
-                              value: level,
-                              child: Text(level.toUpperCase()),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _selectedHealthStatus = 'healthy';
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color:
+                                _selectedHealthStatus == 'healthy'
+                                    ? Colors.green.withOpacity(0.1)
+                                    : Colors.grey[100],
+                            border: Border.all(
+                              color:
+                                  _selectedHealthStatus == 'healthy'
+                                      ? Colors.green
+                                      : Colors.grey[300]!,
+                              width: 2,
                             ),
-                          )
-                          .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedSeverity = value!;
-                    });
-                  },
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.check_circle,
+                                color:
+                                    _selectedHealthStatus == 'healthy'
+                                        ? Colors.green
+                                        : Colors.grey,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Healthy',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color:
+                                      _selectedHealthStatus == 'healthy'
+                                          ? Colors.green
+                                          : Colors.grey[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _selectedHealthStatus = 'not_healthy';
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color:
+                                _selectedHealthStatus == 'not_healthy'
+                                    ? Colors.orange.withOpacity(0.1)
+                                    : Colors.grey[100],
+                            border: Border.all(
+                              color:
+                                  _selectedHealthStatus == 'not_healthy'
+                                      ? Colors.orange
+                                      : Colors.grey[300]!,
+                              width: 2,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.warning,
+                                color:
+                                    _selectedHealthStatus == 'not_healthy'
+                                        ? Colors.orange
+                                        : Colors.grey,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Not Healthy',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color:
+                                      _selectedHealthStatus == 'not_healthy'
+                                          ? Colors.orange
+                                          : Colors.grey[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
         ),
         const SizedBox(height: 16),
-        // Treatment Plan
+        // Additional Treatment Plan
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -1591,96 +1643,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Treatment Plan',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _treatmentController,
-                  decoration: const InputDecoration(
-                    labelText: 'Recommended Treatment (Optional)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _dosageController,
-                  decoration: const InputDecoration(
-                    labelText: 'Dosage (Optional)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _frequencyController,
-                  decoration: const InputDecoration(
-                    labelText: 'Application Frequency (Optional)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _precautionsController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Precautions (Optional)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        // Preventive Measures
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Preventive Measures (Optional)',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children:
-                      _preventiveMeasures.map((measure) {
-                        final isSelected = _selectedPreventiveMeasures.contains(
-                          measure,
-                        );
-                        return FilterChip(
-                          label: Text(measure),
-                          selected: isSelected,
-                          onSelected: (selected) {
-                            setState(() {
-                              if (selected) {
-                                _selectedPreventiveMeasures.add(measure);
-                              } else {
-                                _selectedPreventiveMeasures.remove(measure);
-                              }
-                            });
-                          },
-                        );
-                      }).toList(),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        // Expert Comment
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Expert Comment',
+                  'Additional Treatment Plan',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
@@ -1688,9 +1651,9 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                   controller: _commentController,
                   maxLines: 4,
                   decoration: const InputDecoration(
-                    labelText: 'Expert Comment *',
+                    labelText: 'Additional Treatment Plan (Optional)',
                     hintText:
-                        'Enter your analysis and recommendations... (Required)',
+                        'Enter additional treatment recommendations... (Optional)',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -1764,11 +1727,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
       );
     }
 
-    final severity = review['severityAssessment']?['level'] ?? 'medium';
-    final recommendations =
-        review['treatmentPlan']?['recommendations'] as List?;
-    final preventiveMeasures =
-        review['treatmentPlan']?['preventiveMeasures'] as List?;
+    final healthStatus = review['healthStatus'] ?? null;
     final comment = review['comment'] ?? '';
 
     return Column(
@@ -1789,39 +1748,8 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
           ],
         ),
         const SizedBox(height: 16),
-        // Severity Assessment
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Severity Assessment',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.warning, color: _getSeverityColor(severity)),
-                    const SizedBox(width: 8),
-                    Text(
-                      severity.toString().toUpperCase(),
-                      style: TextStyle(
-                        color: _getSeverityColor(severity),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        // Treatment Plan
-        if (recommendations != null && recommendations.isNotEmpty)
+        // Health Status
+        if (healthStatus != null)
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -1829,80 +1757,41 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Treatment Plan',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  ...recommendations.map((treatment) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (treatment['treatment'] != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Text(
-                              'Treatment: ${treatment['treatment']}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        if (treatment['dosage'] != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Text('Dosage: ${treatment['dosage']}'),
-                          ),
-                        if (treatment['frequency'] != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Text('Frequency: ${treatment['frequency']}'),
-                          ),
-                        if (treatment['precautions'] != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Text(
-                              'Precautions: ${treatment['precautions']}',
-                            ),
-                          ),
-                        const SizedBox(height: 8),
-                      ],
-                    );
-                  }).toList(),
-                ],
-              ),
-            ),
-          ),
-        const SizedBox(height: 16),
-        // Preventive Measures
-        if (preventiveMeasures != null && preventiveMeasures.isNotEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Preventive Measures',
+                    'Health Status',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children:
-                        preventiveMeasures.map<Widget>((measure) {
-                          return Chip(
-                            label: Text(measure.toString()),
-                            backgroundColor: Colors.green.withOpacity(0.1),
-                          );
-                        }).toList(),
+                  Row(
+                    children: [
+                      Icon(
+                        healthStatus == 'healthy'
+                            ? Icons.check_circle
+                            : Icons.warning,
+                        color:
+                            healthStatus == 'healthy'
+                                ? Colors.green
+                                : Colors.orange,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        healthStatus == 'healthy' ? 'Healthy' : 'Not Healthy',
+                        style: TextStyle(
+                          color:
+                              healthStatus == 'healthy'
+                                  ? Colors.green
+                                  : Colors.orange,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
-        const SizedBox(height: 16),
-        // Expert Comment
+        if (healthStatus != null) const SizedBox(height: 16),
+        // Additional Treatment Plan
         if (comment.isNotEmpty)
           Card(
             child: Padding(
@@ -1911,7 +1800,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Expert Comment',
+                    'Additional Treatment Plan',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),

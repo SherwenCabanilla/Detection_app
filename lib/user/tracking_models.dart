@@ -6,6 +6,7 @@ class TrackingModels {
   static const Map<String, Color> diseaseColors = {
     'anthracnose': Colors.orange,
     'backterial_blackspot': Colors.purple,
+    'bacterial_blackspot': Colors.purple,
     'dieback': Colors.red,
     'healthy': Color.fromARGB(255, 2, 119, 252),
     'powdery_mildew': Color.fromARGB(255, 9, 46, 2),
@@ -14,9 +15,10 @@ class TrackingModels {
   };
 
   // List of real diseases (excluding tip burn/unknown)
+  // Note: bacterial_blackspot is normalized to backterial_blackspot when counting
   static const List<String> diseaseLabels = [
     'anthracnose',
-    'backterial_blackspot',
+    'backterial_blackspot', // This represents both backterial_blackspot and bacterial_blackspot
     'powdery_mildew',
     'dieback',
   ];
@@ -29,6 +31,10 @@ class TrackingModels {
 
   static bool isRealDisease(String label) {
     final l = label.toLowerCase();
+    // Handle both spellings of bacterial black spot
+    if (l == 'bacterial_blackspot' || l == 'backterial_blackspot') {
+      return true;
+    }
     return diseaseLabels.contains(l);
   }
 
@@ -69,6 +75,7 @@ class TrackingModels {
   static String formatLabel(String label) {
     switch (label.toLowerCase()) {
       case 'backterial_blackspot':
+      case 'bacterial_blackspot':
         return 'Bacterial black spot';
       case 'powdery_mildew':
         return 'Powdery Mildew';
@@ -167,24 +174,58 @@ class TrackingModels {
     List<Map<String, dynamic>> scans,
   ) {
     final Map<String, Map<String, int>> result = {};
+    
+    // Group scans by month and session to count unique diseases per report
+    final Map<String, Map<String, Set<String>>> diseasesByMonthAndSession = {};
+    
     for (final scan in scans) {
       final date = scan['date'] ?? '';
       final label = (scan['disease'] ?? '').toLowerCase();
       if (date.isEmpty || label == 'tip_burn' || label == 'unknown') continue;
+      
       final month = date.substring(0, 7); // 'YYYY-MM'
+      final sessionKey = date; // Use date as session identifier
+      
+      diseasesByMonthAndSession.putIfAbsent(month, () => {});
+      diseasesByMonthAndSession[month]!.putIfAbsent(sessionKey, () => <String>{});
+      
+      if (label == 'healthy') {
+        diseasesByMonthAndSession[month]![sessionKey]!.add('healthy');
+      } else if (isRealDisease(label)) {
+        // Normalize bacterial black spot to backterial_blackspot for consistency
+        final normalizedLabel = (label == 'bacterial_blackspot' || label == 'backterial_blackspot')
+            ? 'backterial_blackspot'
+            : label;
+        diseasesByMonthAndSession[month]![sessionKey]!.add(normalizedLabel);
+      }
+    }
+    
+    // Initialize result map for each month
+    for (final month in diseasesByMonthAndSession.keys) {
       result.putIfAbsent(
         month,
         () => {
           'healthy': 0,
-          ...{for (var d in diseaseLabels) d: 0},
+          'backterial_blackspot': 0, // This will also count bacterial_blackspot after normalization
+          ...{for (var d in diseaseLabels.where((d) => d != 'backterial_blackspot')) d: 0},
         },
       );
-      if (label == 'healthy') {
-        result[month]!['healthy'] = (result[month]!['healthy'] ?? 0) + 1;
-      } else if (isRealDisease(label)) {
-        result[month]![label] = (result[month]![label] ?? 0) + 1;
+    }
+    
+    // Count each unique disease once per session per month
+    for (final monthEntry in diseasesByMonthAndSession.entries) {
+      final month = monthEntry.key;
+      for (final diseases in monthEntry.value.values) {
+        for (final disease in diseases) {
+          // Normalize bacterial_blackspot to backterial_blackspot for counting
+          final normalizedDisease = (disease == 'bacterial_blackspot' || disease == 'backterial_blackspot')
+              ? 'backterial_blackspot'
+              : disease;
+          result[month]![normalizedDisease] = (result[month]![normalizedDisease] ?? 0) + 1;
+        }
       }
     }
+    
     return result;
   }
 
@@ -193,17 +234,44 @@ class TrackingModels {
   ) {
     final Map<String, int> result = {
       'healthy': 0,
-      ...{for (var d in diseaseLabels) d: 0},
+      'backterial_blackspot': 0, // This will also count bacterial_blackspot after normalization
+      ...{for (var d in diseaseLabels.where((d) => d != 'backterial_blackspot')) d: 0},
     };
+    
+    // Group scans by session/date to count unique diseases per report
+    final Map<String, Set<String>> diseasesBySession = {};
+    
     for (final scan in scans) {
+      final date = scan['date'] ?? '';
       final label = (scan['disease'] ?? '').toLowerCase();
       if (label == 'tip_burn' || label == 'unknown') continue;
+      
+      // Use date as session identifier (or could use sessionId if available)
+      final sessionKey = date;
+      diseasesBySession.putIfAbsent(sessionKey, () => <String>{});
+      
       if (label == 'healthy') {
-        result['healthy'] = (result['healthy'] ?? 0) + 1;
+        diseasesBySession[sessionKey]!.add('healthy');
       } else if (isRealDisease(label)) {
-        result[label] = (result[label] ?? 0) + 1;
+        // Normalize bacterial black spot to backterial_blackspot for consistency
+        final normalizedLabel = (label == 'bacterial_blackspot' || label == 'backterial_blackspot')
+            ? 'backterial_blackspot'
+            : label;
+        diseasesBySession[sessionKey]!.add(normalizedLabel);
       }
     }
+    
+    // Count each unique disease once per session
+    for (final diseases in diseasesBySession.values) {
+      for (final disease in diseases) {
+        // Normalize bacterial_blackspot to backterial_blackspot for counting
+        final normalizedDisease = (disease == 'bacterial_blackspot' || disease == 'backterial_blackspot')
+            ? 'backterial_blackspot'
+            : disease;
+        result[normalizedDisease] = (result[normalizedDisease] ?? 0) + 1;
+      }
+    }
+    
     return result;
   }
 

@@ -63,7 +63,7 @@ flutter:
 
   assets:
     - assets/labelsv2.txt
-    - assets/v40.tflite
+    - assets/v43.tflite
     - assets/logo.png
     - assets/applogo.png
     - assets/applogo_header.png
