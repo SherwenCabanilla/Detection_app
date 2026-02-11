@@ -64,6 +64,8 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
         });
       }
     });
+    // Clean up tracking groups cache with deleted IDs
+    _cleanupDeletedGroups();
     // Load disease information from Firestore
     _loadDiseaseInfo();
     // Check if there are no detections and show modal
@@ -72,6 +74,75 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
         _checkAndShowNoDetectionModal();
       }
     });
+  }
+  
+  Future<void> _cleanupDeletedGroups() async {
+    try {
+      final box = await _trackingGroupsBox();
+      final userId = await _currentUserId();
+      
+      // Load deleted group IDs from local and Firestore
+      final rawDeleted = box.get('deletedGroupIds', defaultValue: []);
+      final deletedGroupIds = (rawDeleted is List) 
+          ? rawDeleted.map((e) => e.toString()).toSet() 
+          : <String>{};
+      
+      // Also load from Firestore
+      if (userId != null && userId.isNotEmpty) {
+        try {
+          final deletedDoc = await _deletedGroupIdsRef(userId).get();
+          if (deletedDoc.exists) {
+            final remoteDeleted = deletedDoc.data()?['ids'];
+            if (remoteDeleted is List) {
+              for (final id in remoteDeleted) {
+                if (id is String && id.isNotEmpty) {
+                  deletedGroupIds.add(id);
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+      
+      if (deletedGroupIds.isEmpty) return;
+      
+      // Clean up local Hive cache
+      final raw = box.get('groups', defaultValue: []);
+      if (raw is List) {
+        final cleaned = raw
+            .whereType<Map>()
+            .where((g) => !deletedGroupIds.contains((g['id'] ?? '').toString()))
+            .toList();
+        
+        if (cleaned.length < raw.length) {
+          await box.put('groups', cleaned);
+          print('INFO: Cleaned up ${raw.length - cleaned.length} deleted tracking groups from local cache');
+        }
+      }
+      
+      // Clean up Firestore documents (one-time cleanup for orphaned docs)
+      if (userId != null && userId.isNotEmpty) {
+        try {
+          final snap = await _trackingGroupsRef(userId).get();
+          int deletedCount = 0;
+          for (final doc in snap.docs) {
+            final groupId = (doc.data()['id'] ?? doc.id).toString();
+            if (deletedGroupIds.contains(groupId)) {
+              await doc.reference.delete();
+              deletedCount++;
+              print('INFO: Deleted orphaned Firestore document: $groupId');
+            }
+          }
+          if (deletedCount > 0) {
+            print('INFO: Cleaned up $deletedCount deleted tracking groups from Firestore');
+          }
+        } catch (e) {
+          print('WARN: Failed to cleanup Firestore documents: $e');
+        }
+      }
+    } catch (e) {
+      print('WARN: Failed to cleanup deleted groups: $e');
+    }
   }
 
   @override
@@ -168,39 +239,111 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
         .collection('tracking_groups');
   }
 
+  DocumentReference<Map<String, dynamic>> _deletedGroupIdsRef(String userId) {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('tracking_meta')
+        .doc('deleted_groups');
+  }
+
   Future<List<Map<String, dynamic>>> _loadTrackingGroups() async {
     try {
       final box = await _trackingGroupsBox();
+      final userId = await _currentUserId();
+      
+      // Load deleted group IDs from local Hive first
+      final rawDeleted = box.get('deletedGroupIds', defaultValue: []);
+      final deletedGroupIds = (rawDeleted is List) 
+          ? rawDeleted.map((e) => e.toString()).toSet() 
+          : <String>{};
+      
+      // Also load from Firestore (survives reinstalls)
+      if (userId != null && userId.isNotEmpty) {
+        try {
+          final deletedDoc = await _deletedGroupIdsRef(userId).get();
+          if (deletedDoc.exists) {
+            final remoteDeleted = deletedDoc.data()?['ids'];
+            if (remoteDeleted is List) {
+              for (final id in remoteDeleted) {
+                if (id is String && id.isNotEmpty) {
+                  deletedGroupIds.add(id);
+                }
+              }
+              // Sync back to local Hive
+              await box.put('deletedGroupIds', deletedGroupIds.toList());
+            }
+          }
+        } catch (e) {
+          print('DEBUG analysis_summary: Failed to load deleted IDs from Firestore: $e');
+        }
+      }
+      
+      print('DEBUG analysis_summary: deletedGroupIds (after Firestore sync) = $deletedGroupIds');
+      
       final raw = box.get('groups', defaultValue: []);
       if (raw is! List) return [];
+      
+      print('DEBUG analysis_summary: raw groups count = ${raw.length}');
+      
       final local =
           raw
               .whereType<Map>()
               .map((m) => Map<String, dynamic>.from(m))
+              .where((g) {
+                final id = (g['id'] ?? '').toString();
+                final isDeleted = deletedGroupIds.contains(id);
+                if (isDeleted) {
+                  print('DEBUG analysis_summary: Filtering out deleted group: $id');
+                }
+                return !isDeleted;
+              })
               .toList();
+      
+      print('DEBUG analysis_summary: filtered local groups count = ${local.length}');
+      
+      // Update local cache to remove deleted groups
+      if (local.length < raw.length) {
+        await box.put('groups', local);
+        print('DEBUG analysis_summary: Updated groups cache, removed ${raw.length - local.length} deleted groups');
+      }
 
       // Best-effort refresh from Firestore so groups survive app data clears.
-      final userId = await _currentUserId();
       if (userId != null && userId.isNotEmpty) {
         try {
           final snap =
               await _trackingGroupsRef(
                 userId,
               ).orderBy('createdAt', descending: true).get();
+          
+          print('DEBUG analysis_summary: Firestore returned ${snap.docs.length} documents');
+          for (final doc in snap.docs) {
+            final data = doc.data();
+            final docId = doc.id;
+            final groupId = (data['id'] ?? '').toString();
+            final groupName = (data['name'] ?? '').toString();
+            final isDeleted = deletedGroupIds.contains(groupId);
+            print('DEBUG analysis_summary: Firestore doc: docId=$docId, groupId=$groupId, name=$groupName, isDeleted=$isDeleted');
+          }
+          
           final remote =
               snap.docs
                   .map((d) => Map<String, dynamic>.from(d.data()))
+                  .where((g) => !deletedGroupIds.contains((g['id'] ?? '').toString())) // Filter deleted
                   .toList();
           if (remote.isNotEmpty) {
             await box.put('groups', remote);
+            print('DEBUG analysis_summary: Loaded ${remote.length} groups from Firestore (after filtering deleted)');
             return remote;
           }
-        } catch (_) {
+        } catch (e) {
+          print('DEBUG analysis_summary: Firestore load failed: $e');
           // ignore, fall back to local cache
         }
       }
       return local;
-    } catch (_) {
+    } catch (e) {
+      print('DEBUG analysis_summary: _loadTrackingGroups error: $e');
       return [];
     }
   }
@@ -231,6 +374,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
       return {'id': _trackingGroupId!, 'name': _trackingGroupName!};
     }
 
+    // Ensure deleted groups are filtered
     final groupsAll = await _loadTrackingGroups();
     final box = await _trackingGroupsBox();
     final lastId = box.get('lastGroupId')?.toString();

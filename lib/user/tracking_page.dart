@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -28,6 +29,8 @@ class _TrackingPageState extends State<TrackingPage> {
   final Map<String, bool> _endedGroups = <String, bool>{};
   final Map<String, String> _groupNames = <String, String>{};
   final Set<String> _deletedGroupIds = <String>{};
+  bool _hasLoadedMeta = false; // Prevent multiple loads
+  Future<List<Map<String, dynamic>>>? _sessionsFuture; // Cache the future
 
   Future<String?> _currentUserId() async {
     try {
@@ -94,6 +97,7 @@ class _TrackingPageState extends State<TrackingPage> {
           final remote =
               snap.docs
                   .map((d) => Map<String, dynamic>.from(d.data()))
+                  .where((g) => !deletedIds.contains((g['id'] ?? '').toString())) // Filter out deleted groups
                   .toList();
           if (remote.isNotEmpty) {
             await box.put('groups', remote);
@@ -479,9 +483,24 @@ class _TrackingPageState extends State<TrackingPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _loadSelectedRangeIndex();
-    _loadSelectedTrackingGroupId();
-    _loadTrackingGroupMeta();
+    // Only load once to prevent flickering when navigating back to this page
+    if (!_hasLoadedMeta) {
+      _hasLoadedMeta = true;
+      _loadSelectedRangeIndex();
+      _loadSelectedTrackingGroupId();
+      _loadTrackingGroupMeta();
+      // Initialize sessions future once
+      _initSessionsFuture();
+    }
+  }
+
+  void _initSessionsFuture() async {
+    final userId = await _currentUserId();
+    if (userId != null && userId.isNotEmpty) {
+      setState(() {
+        _sessionsFuture = _loadSessionsWithFallback(userId);
+      });
+    }
   }
 
   Future<void> _loadSelectedTrackingGroupId() async {
@@ -2427,17 +2446,41 @@ class _TrackingPageState extends State<TrackingPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Check if userBox is open before accessing it
+    if (!Hive.isBoxOpen('userBox')) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    
     final userBox = Hive.box('userBox');
     final userProfile = userBox.get('userProfile');
     final userId = userProfile?['userId'];
+    
+    // If no userId, check if we're still initializing (wait for auth sync)
     if (userId == null) {
-      return Center(child: Text(tr('not_logged_in')));
+      // Check if Firebase Auth has a current user (still syncing to Hive)
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      if (firebaseUser != null) {
+        // User is logged in via Firebase but Hive hasn't synced yet - show loading
+        return const Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        );
+      }
+      // No Firebase user either - actually not logged in
+      return Scaffold(
+        body: Center(child: Text(tr('not_logged_in'))),
+      );
     }
 
     // Note: Real-time streams removed; we use a one-time load with offline cache.
+    // Use cached future to prevent flickering on rebuild
+    if (_sessionsFuture == null) {
+      _sessionsFuture = _loadSessionsWithFallback(userId);
+    }
 
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _loadSessionsWithFallback(userId),
+      future: _sessionsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(

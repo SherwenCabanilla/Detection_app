@@ -97,18 +97,26 @@ class DiseaseDetailsPage extends StatelessWidget {
                 const SizedBox(height: 8),
                 // Confirmation source
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.verified, size: 16, color: Colors.white),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: Icon(Icons.verified, size: 16, color: Colors.white),
+                    ),
                     const SizedBox(width: 6),
-                    Text(
-                      tr(
-                        'provided_by',
-                        namedArgs: {'office': displayConfirmedBy},
-                      ),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontStyle: FontStyle.italic,
+                    Expanded(
+                      child: Text(
+                        tr(
+                          'provided_by',
+                          namedArgs: {'office': displayConfirmedBy},
+                        ),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
