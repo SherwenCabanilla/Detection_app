@@ -44,6 +44,10 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
   // Disease information loaded from Firestore
   Map<String, Map<String, dynamic>> _diseaseInfo = {};
 
+  // Tracking group selection (farmer-defined episode: Tracking 1/2/…)
+  String? _trackingGroupId;
+  String? _trackingGroupName;
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +69,335 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
         _checkAndShowNoDetectionModal();
       }
     });
+  }
+
+  Future<Box> _trackingGroupsBox() => Hive.openBox('trackingGroupsBox');
+
+  Future<String?> _currentUserId() async {
+    try {
+      final userBox = await Hive.openBox('userBox');
+      final profile = userBox.get('userProfile');
+      return profile?['userId']?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  CollectionReference<Map<String, dynamic>> _trackingGroupsRef(String userId) {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('tracking_groups');
+  }
+
+  Future<List<Map<String, dynamic>>> _loadTrackingGroups() async {
+    try {
+      final box = await _trackingGroupsBox();
+      final raw = box.get('groups', defaultValue: []);
+      if (raw is! List) return [];
+      final local =
+          raw
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+
+      // Best-effort refresh from Firestore so groups survive app data clears.
+      final userId = await _currentUserId();
+      if (userId != null && userId.isNotEmpty) {
+        try {
+          final snap =
+              await _trackingGroupsRef(userId).orderBy('createdAt', descending: true).get();
+          final remote =
+              snap.docs.map((d) => Map<String, dynamic>.from(d.data())).toList();
+          if (remote.isNotEmpty) {
+            await box.put('groups', remote);
+            return remote;
+          }
+        } catch (_) {
+          // ignore, fall back to local cache
+        }
+      }
+      return local;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _saveTrackingGroups(List<Map<String, dynamic>> groups) async {
+    final box = await _trackingGroupsBox();
+    await box.put('groups', groups);
+  }
+
+  Future<void> _upsertTrackingGroupRemote(Map<String, dynamic> group) async {
+    final userId = await _currentUserId();
+    if (userId == null || userId.isEmpty) return;
+    final id = (group['id'] ?? '').toString();
+    if (id.isEmpty) return;
+    await _trackingGroupsRef(userId).doc(id).set(group, SetOptions(merge: true));
+  }
+
+  Future<void> _saveLastTrackingGroup(String id, String name) async {
+    final box = await _trackingGroupsBox();
+    await box.put('lastGroupId', id);
+    await box.put('lastGroupName', name);
+  }
+
+  Future<Map<String, String>?> _ensureTrackingGroupSelected() async {
+    if (_trackingGroupId != null && _trackingGroupName != null) {
+      return {
+        'id': _trackingGroupId!,
+        'name': _trackingGroupName!,
+      };
+    }
+
+    final groupsAll = await _loadTrackingGroups();
+    final box = await _trackingGroupsBox();
+    final lastId = box.get('lastGroupId')?.toString();
+    final lastName = box.get('lastGroupName')?.toString();
+
+    final picked = await showModalBottomSheet<Map<String, String>>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        final List<Map<String, dynamic>> groupsAllLocal =
+            groupsAll.map((g) => Map<String, dynamic>.from(g)).toList();
+
+        List<Map<String, dynamic>> visibleGroups() => groupsAllLocal
+            .where((g) => g['ended'] != true && g['ended'] != 'true')
+            .toList();
+
+        String? selectedId;
+        String? selectedName;
+        final vis = visibleGroups();
+        if (lastId != null &&
+            vis.any((g) => (g['id'] ?? '').toString() == lastId)) {
+          selectedId = lastId;
+          selectedName =
+              (vis.firstWhere(
+                (g) => (g['id'] ?? '').toString() == selectedId,
+                orElse: () => {'name': lastName},
+              )['name'] ?? lastName)
+                  ?.toString();
+        }
+
+        String defaultNameForIndex(int idx) => '${tr('tracking_group')} $idx';
+
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final groups = visibleGroups();
+            final existingNames =
+                groupsAllLocal.map((g) => (g['name'] ?? '').toString()).toList();
+            final nextIndex = existingNames
+                    .map((n) {
+                      final m = RegExp(r'(\d+)$').firstMatch(n.trim());
+                      return m != null ? int.tryParse(m.group(1)!) : null;
+                    })
+                    .whereType<int>()
+                    .fold<int>(0, (a, b) => a > b ? a : b) +
+                1;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tr('select_tracking_group'),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        tr('tracking_group_help'),
+                        style: TextStyle(color: Colors.grey[700]),
+                      ),
+                      const SizedBox(height: 12),
+                      if (groups.isNotEmpty)
+                        DropdownButtonFormField<String>(
+                          value: selectedId,
+                          isExpanded: true,
+                          items: groups.map((g) {
+                            final id = (g['id'] ?? '').toString();
+                            final name = (g['name'] ?? '').toString();
+                            return DropdownMenuItem(
+                              value: id,
+                              child: Text(name),
+                            );
+                          }).toList(),
+                          onChanged: (v) {
+                            final g = groups.firstWhere(
+                              (e) => (e['id'] ?? '').toString() == v,
+                              orElse: () => {},
+                            );
+                            setSheetState(() {
+                              selectedId = v;
+                              selectedName = (g['name'] ?? '').toString();
+                            });
+                          },
+                          decoration: InputDecoration(
+                            labelText: tr('add_to_existing_group'),
+                            border: const OutlineInputBorder(),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green[700],
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: () async {
+                            final id = DateTime.now()
+                                .millisecondsSinceEpoch
+                                .toString();
+                            final controller = TextEditingController(
+                              text: defaultNameForIndex(nextIndex),
+                            );
+                            final chosenName =
+                                await showDialog<String>(
+                                  context: ctx,
+                                  builder:
+                                      (dctx) => AlertDialog(
+                                        title: Text(tr('name_new_tracking')),
+                                        content: TextField(
+                                          controller: controller,
+                                          decoration: InputDecoration(
+                                            hintText: tr('tracking_name_hint'),
+                                          ),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed:
+                                                () => Navigator.pop(dctx),
+                                            child: Text(tr('cancel')),
+                                          ),
+                                          TextButton(
+                                            onPressed: () {
+                                              final v =
+                                                  controller.text.trim();
+                                              if (v.isEmpty) {
+                                                ScaffoldMessenger.of(dctx)
+                                                    .showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      tr(
+                                                        'tracking_name_required',
+                                                      ),
+                                                    ),
+                                                    backgroundColor: Colors.red,
+                                                    behavior:
+                                                        SnackBarBehavior.floating,
+                                                  ),
+                                                );
+                                                return;
+                                              }
+                                              Navigator.pop(dctx, v);
+                                            },
+                                            child: Text(tr('create')),
+                                          ),
+                                        ],
+                                      ),
+                                );
+                            if (chosenName == null) return;
+                            final autoName = chosenName;
+                            final created = {
+                              'id': id,
+                              'name': autoName,
+                              'createdAt': DateTime.now().toIso8601String(),
+                              'ended': false,
+                            };
+                            final updated = [created, ...groupsAllLocal];
+                            await _saveTrackingGroups(updated);
+                            await _upsertTrackingGroupRemote(created);
+                            await _saveLastTrackingGroup(id, autoName);
+                            if (ctx.mounted) {
+                              Navigator.pop(ctx, {
+                                'id': id,
+                                'name': autoName,
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.add),
+                          label: Text(
+                            '${tr('create_new_group')} (${defaultNameForIndex(nextIndex)})',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(ctx, null),
+                              child: Text(tr('cancel')),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () async {
+                                if (selectedId != null &&
+                                    (selectedName ?? '').isNotEmpty) {
+                                  await _saveLastTrackingGroup(
+                                    selectedId!,
+                                    selectedName!,
+                                  );
+                                  if (ctx.mounted) {
+                                    Navigator.pop(ctx, {
+                                      'id': selectedId!,
+                                      'name': selectedName!,
+                                    });
+                                  }
+                                  return;
+                                }
+                                // Nothing chosen
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  SnackBar(
+                                    content: Text(tr('tracking_group_required')),
+                                    backgroundColor: Colors.red,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
+                              child: Text(tr('continue')),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _trackingGroupId = picked['id'];
+        _trackingGroupName = picked['name'];
+      });
+    }
+    return picked;
   }
 
   // Check if there are warnings that should prevent sending for review
@@ -414,7 +747,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
             'scientificName': data['scientificName'] ?? '',
             'symptoms': List<String>.from(data['symptoms'] ?? []),
             'treatments': List<String>.from(data['treatments'] ?? []),
-            'confirmedBy': data['confirmedBy'] ?? 'Agricultural Office',
+            'confirmedBy': data['confirmedBy'] ?? tr('agricultural_office'),
           };
         }
       }
@@ -659,6 +992,11 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
 
   Future<void> _sendForExternalReview() async {
     print('DEBUG: _sendForExternalReview called');
+    final tg = await _ensureTrackingGroupSelected();
+    if (tg == null) {
+      // user cancelled selection
+      return;
+    }
     if (_serviceUnavailable) {
       await _showServiceUnavailableDialog();
       return;
@@ -793,6 +1131,8 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
             'userName': fullName,
             'status': 'pending',
             'submittedAt': now,
+            'trackingGroupId': tg['id'],
+            'trackingGroupName': tg['name'],
             'images': images, // This now includes both imageUrl and imagePath
             'diseaseSummary':
                 diseaseCounts
@@ -884,6 +1224,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     }
   }
 
+  // ignore: unused_element
   Widget _buildDiseaseCard(String name, String imagePath, String diseaseKey) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -991,7 +1332,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
           name: name,
           imagePath: imagePath.isEmpty ? 'assets/replace_disease/healthy_image.jpg' : imagePath,
           scientificName: info?['scientificName'] ?? '',
-          confirmedBy: info?['confirmedBy'] ?? 'Agricultural Office',
+          confirmedBy: info?['confirmedBy'] ?? tr('agricultural_office'),
           details: {
             tr('treatments'):
                 (getLocalizedTreatments(context, diseaseKey) ??
@@ -1101,7 +1442,6 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
   }
 
   Widget _buildCombinedDiseaseCard(List<MapEntry<String, int>> sortedDiseases) {
-    final diseaseCounts = _getOverallDiseaseCount();
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -1227,6 +1567,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     },
   };
 
+  // ignore: unused_element
   void _showDiseaseRecommendations(BuildContext context, String disease) async {
     final label = disease.toLowerCase();
 
@@ -1512,6 +1853,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     );
   }
 
+  // ignore: unused_element
   void _showDiseaseCards(
     BuildContext context,
     List<MapEntry<String, int>> diseases,
@@ -1643,6 +1985,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     );
   }
 
+  // ignore: unused_element
   void _showAllDiseaseRecommendations(
     BuildContext context,
     List<MapEntry<String, int>> diseases,
@@ -1890,6 +2233,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     );
   }
 
+  // ignore: unused_element
   void _showHealthyStatus(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -1960,6 +2304,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     );
   }
 
+  // ignore: unused_element
   void _showUnknownStatus(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -2181,6 +2526,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
   }
 
   // Add this method to handle 'Add to Tracking' logic
+  // ignore: unused_element
   Future<void> _addToTracking() async {
     print('DEBUG: _addToTracking called');
     setState(() {
@@ -2607,6 +2953,7 @@ class _ImageCarouselViewerState extends State<_ImageCarouselViewer> {
     super.dispose();
   }
 
+  // ignore: unused_element
   void _toggleControls() {
     setState(() {
       _showControls = !_showControls;

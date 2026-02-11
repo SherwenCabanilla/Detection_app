@@ -2062,7 +2062,7 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
                       ? imagePath
                       : _getDiseaseImagePath(diseaseKey),
               scientificName: info?['scientificName'] ?? '',
-              confirmedBy: info?['confirmedBy'] ?? 'Agricultural Office',
+              confirmedBy: info?['confirmedBy'] ?? tr('agricultural_office'),
               details: {
                 tr('treatments'):
                     (getLocalizedTreatments(context, diseaseKey) ??
@@ -2133,7 +2133,7 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
             'scientificName': data['scientificName'] ?? '',
             'symptoms': List<String>.from(data['symptoms'] ?? []),
             'treatments': List<String>.from(data['treatments'] ?? []),
-            'confirmedBy': data['confirmedBy'] ?? 'Agricultural Office',
+            'confirmedBy': data['confirmedBy'] ?? tr('agricultural_office'),
           };
         }
       }

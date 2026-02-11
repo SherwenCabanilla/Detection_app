@@ -256,62 +256,68 @@ class _HomePageState extends State<HomePage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Row(
-          children: [
-            Icon(
-              Icons.warning_amber_rounded,
-              color: Colors.orange[700],
-              size: 28,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Warning',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
+            title: Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.orange[700],
+                  size: 28,
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Warning',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        content: Text(
-          message,
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.grey[700],
-            height: 1.5,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-            child: Text(
-              'OK',
+            content: Text(
+              message,
               style: TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.orange[700],
+                color: Colors.grey[700],
+                height: 1.5,
               ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+                child: Text(
+                  'OK',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.orange[700],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
   // Validate detection results - returns error message if validation fails, null if OK
-  String? _validateDetectionResults(Map<int, List<DetectionResult>> allResults) {
+  String? _validateDetectionResults(
+    Map<int, List<DetectionResult>> allResults,
+  ) {
     // All detections are now allowed to proceed to analysis summary
     // Warnings will be shown in the analysis summary screen instead
     return null;
@@ -440,7 +446,7 @@ class _HomePageState extends State<HomePage> {
             'scientificName': data['scientificName'] ?? '',
             'symptoms': List<String>.from(data['symptoms'] ?? []),
             'treatments': List<String>.from(data['treatments'] ?? []),
-            'confirmedBy': data['confirmedBy'] ?? 'Agricultural Office',
+            'confirmedBy': data['confirmedBy'] ?? tr('agricultural_office'),
           };
         }
       }
@@ -766,15 +772,16 @@ class _HomePageState extends State<HomePage> {
               imagePath: imagePath,
               scientificName: _diseaseInfo[name]?['scientificName'] ?? '',
               confirmedBy:
-                  _diseaseInfo[name]?['confirmedBy'] ?? 'Agricultural Office',
+                  _diseaseInfo[name]?['confirmedBy'] ??
+                  tr('agricultural_office'),
               details: {
                 tr('treatments'):
                     (getLocalizedTreatments(context, name) ??
                         (_diseaseInfo[name]?['treatments'] ?? [])),
                 tr('preventive_measures'):
                     (getLocalizedPreventiveMeasures(context, name) ??
-                            const <String>[])
-                        .isNotEmpty
+                                const <String>[])
+                            .isNotEmpty
                         ? (getLocalizedPreventiveMeasures(context, name) ??
                             const <String>[])
                         : <String>[tr('not_applicable')],
@@ -1270,7 +1277,7 @@ class _HomePageState extends State<HomePage> {
 
     // Get primary disease name using same logic as My Requests
     String diseaseName = 'Analyzing...';
-    
+
     if (diseaseSummary.isNotEmpty) {
       // Define valid diseases
       const validDiseases = {
@@ -1282,15 +1289,18 @@ class _HomePageState extends State<HomePage> {
         'powdery_mildew',
         'dieback',
       };
-      
+
       // First, try to find actual diseases
-      final diseaseItems = diseaseSummary.where((d) {
-        final rawDiseaseName = (d['disease'] ?? d['name'] ?? d['label'] ?? '').toString();
-        final normalizedName = rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
-        return validDiseases.contains(normalizedName) || 
-               validDiseases.contains(rawDiseaseName.toLowerCase());
-      }).toList();
-      
+      final diseaseItems =
+          diseaseSummary.where((d) {
+            final rawDiseaseName =
+                (d['disease'] ?? d['name'] ?? d['label'] ?? '').toString();
+            final normalizedName =
+                rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
+            return validDiseases.contains(normalizedName) ||
+                validDiseases.contains(rawDiseaseName.toLowerCase());
+          }).toList();
+
       if (diseaseItems.isNotEmpty) {
         // If diseases found, show the one with highest count
         diseaseItems.sort((a, b) {
@@ -1298,20 +1308,24 @@ class _HomePageState extends State<HomePage> {
           final countB = (b['count'] is num) ? b['count'] as num : 0;
           return countB.compareTo(countA);
         });
-        final rawName = (diseaseItems.first['name'] ??
-                diseaseItems.first['disease'] ??
-                diseaseItems.first['label'] ??
-                'Unknown')
-            .toString();
+        final rawName =
+            (diseaseItems.first['name'] ??
+                    diseaseItems.first['disease'] ??
+                    diseaseItems.first['label'] ??
+                    'Unknown')
+                .toString();
         diseaseName = _formatExpertLabel(rawName);
       } else {
         // No diseases found, check for healthy
-        final healthyItems = diseaseSummary.where((d) {
-          final rawDiseaseName = (d['disease'] ?? d['name'] ?? d['label'] ?? '').toString();
-          final normalizedName = rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
-          return normalizedName == 'healthy';
-        }).toList();
-        
+        final healthyItems =
+            diseaseSummary.where((d) {
+              final rawDiseaseName =
+                  (d['disease'] ?? d['name'] ?? d['label'] ?? '').toString();
+              final normalizedName =
+                  rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
+              return normalizedName == 'healthy';
+            }).toList();
+
         if (healthyItems.isNotEmpty) {
           // Show "Healthy" if healthy leaves detected
           diseaseName = 'Healthy';
@@ -1345,14 +1359,16 @@ class _HomePageState extends State<HomePage> {
             'powdery_mildew',
             'dieback',
           };
-          
-          final sorted = counts.entries.toList()
-            ..sort((a, b) => b.value.compareTo(a.value));
-          
+
+          final sorted =
+              counts.entries.toList()
+                ..sort((a, b) => b.value.compareTo(a.value));
+
           // Find first valid disease
           for (final entry in sorted) {
-            final normalizedName = entry.key.toLowerCase().replaceAll('_', ' ').trim();
-            if (validDiseases.contains(normalizedName) || 
+            final normalizedName =
+                entry.key.toLowerCase().replaceAll('_', ' ').trim();
+            if (validDiseases.contains(normalizedName) ||
                 validDiseases.contains(entry.key.toLowerCase())) {
               diseaseName = _formatExpertLabel(entry.key);
               break;
@@ -1641,14 +1657,14 @@ class _HomePageState extends State<HomePage> {
   Widget _buildDiseaseCard(String name, String imagePath) {
     // Get confirmation source from disease info
     final confirmedByRaw =
-        _diseaseInfo[name]?['confirmedBy'] ?? 'Agricultural Office';
+        _diseaseInfo[name]?['confirmedBy'] ?? tr('agricultural_office');
     final confirmedByNorm = confirmedByRaw.trim().toLowerCase();
     final confirmedBy =
         (confirmedByNorm == 'office of carmen' ||
                 confirmedByNorm == 'agricultural office')
             ? tr('agricultural_office')
             : confirmedByRaw;
-    
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       shape: RoundedRectangleBorder(

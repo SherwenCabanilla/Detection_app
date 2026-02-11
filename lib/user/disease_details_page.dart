@@ -98,11 +98,7 @@ class DiseaseDetailsPage extends StatelessWidget {
                 // Confirmation source
                 Row(
                   children: [
-                    const Icon(
-                      Icons.verified,
-                      size: 16,
-                      color: Colors.white,
-                    ),
+                    const Icon(Icons.verified, size: 16, color: Colors.white),
                     const SizedBox(width: 6),
                     Text(
                       tr(

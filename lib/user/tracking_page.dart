@@ -9,7 +9,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'tracking_models.dart';
-import 'tracking_chart.dart';
 // Bounding boxes for tracking modal will be drawn with a lightweight painter below
 
 class TrackingPage extends StatefulWidget {
@@ -25,11 +24,391 @@ class _TrackingPageState extends State<TrackingPage> {
   DateTime? _customEndDate;
   int? _monthlyYear;
   int? _monthlyMonth; // 1-12
+  String? _selectedTrackingGroupId;
+  final Map<String, bool> _endedGroups = <String, bool>{};
+  final Map<String, String> _groupNames = <String, String>{};
+
+  Future<String?> _currentUserId() async {
+    try {
+      final userBox = await Hive.openBox('userBox');
+      final profile = userBox.get('userProfile');
+      return profile?['userId']?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  CollectionReference<Map<String, dynamic>> _trackingGroupsRef(String userId) {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('tracking_groups');
+  }
+
+  Future<void> _loadTrackingGroupMeta() async {
+    try {
+      final box = await Hive.openBox('trackingGroupsBox');
+      // Try Firestore first so data survives cache clears; fall back to Hive.
+      final userId = await _currentUserId();
+      if (userId != null && userId.isNotEmpty) {
+        try {
+          final snap =
+              await _trackingGroupsRef(
+                userId,
+              ).orderBy('createdAt', descending: true).get();
+          final remote =
+              snap.docs
+                  .map((d) => Map<String, dynamic>.from(d.data()))
+                  .toList();
+          if (remote.isNotEmpty) {
+            await box.put('groups', remote);
+          }
+        } catch (_) {
+          // ignore; use cached Hive
+        }
+      }
+
+      final raw = box.get('groups', defaultValue: []);
+      if (raw is! List) return;
+      final Map<String, bool> ended = {};
+      final Map<String, String> names = {};
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final id = (item['id'] ?? '').toString();
+        if (id.isEmpty) continue;
+        ended[id] = item['ended'] == true;
+        final n = (item['name'] ?? '').toString().trim();
+        if (n.isNotEmpty) names[id] = n;
+      }
+      if (mounted) {
+        setState(() {
+          _endedGroups
+            ..clear()
+            ..addAll(ended);
+          _groupNames
+            ..clear()
+            ..addAll(names);
+        });
+      } else {
+        _endedGroups
+          ..clear()
+          ..addAll(ended);
+        _groupNames
+          ..clear()
+          ..addAll(names);
+      }
+    } catch (_) {}
+  }
+
+  bool _isGroupEnded(String? id) {
+    if (id == null || id.isEmpty) return false;
+    return _endedGroups[id] == true;
+  }
+
+  Future<void> _endTrackingGroup(String id, {String? name}) async {
+    final box = await Hive.openBox('trackingGroupsBox');
+    final raw = box.get('groups', defaultValue: []);
+    if (raw is! List) return;
+    final List<Map<String, dynamic>> groups =
+        raw.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+    bool found = false;
+    final now = DateTime.now().toIso8601String();
+    for (final g in groups) {
+      if ((g['id'] ?? '').toString() == id) {
+        found = true;
+        g['ended'] = true;
+        g['endedAt'] = now;
+      }
+    }
+    // If the group was never saved into trackingGroupsBox (possible after cache clear /
+    // legacy data), create it so "End tracking" works reliably.
+    if (!found) {
+      final bestName =
+          (name ?? _groupNames[id] ?? '').toString().trim().isNotEmpty
+              ? (name ?? _groupNames[id]).toString().trim()
+              : id;
+      groups.add({
+        'id': id,
+        'name': bestName,
+        'createdAt': now,
+        'ended': true,
+        'endedAt': now,
+      });
+    }
+    await box.put('groups', groups);
+
+    // Persist to Firestore (best-effort)
+    final userId = await _currentUserId();
+    if (userId != null && userId.isNotEmpty) {
+      try {
+        final bestName =
+            (name ?? _groupNames[id] ?? '').toString().trim().isNotEmpty
+                ? (name ?? _groupNames[id]).toString().trim()
+                : id;
+        await _trackingGroupsRef(userId).doc(id).set({
+          'id': id,
+          'name': bestName,
+          'ended': true,
+          'endedAt': now,
+          'updatedAt': now,
+          'createdAt': now,
+        }, SetOptions(merge: true));
+      } catch (_) {}
+    }
+    await _loadTrackingGroupMeta();
+  }
+
+  Future<void> _renameTrackingGroup(String id, String currentName) async {
+    final controller = TextEditingController(text: currentName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dctx) {
+        return AlertDialog(
+          title: Text(tr('rename_tracking_title')),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(hintText: tr('rename_tracking_hint')),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dctx),
+              child: Text(tr('cancel')),
+            ),
+            TextButton(
+              onPressed: () {
+                final v = controller.text.trim();
+                if (v.isEmpty) {
+                  ScaffoldMessenger.of(dctx).showSnackBar(
+                    SnackBar(
+                      content: Text(tr('tracking_name_required')),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pop(dctx, v);
+              },
+              child: Text(tr('update')),
+            ),
+          ],
+        );
+      },
+    );
+    if (newName == null) return;
+
+    final box = await Hive.openBox('trackingGroupsBox');
+    final raw = box.get('groups', defaultValue: []);
+    if (raw is! List) return;
+    final List<Map<String, dynamic>> groups =
+        raw.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+    for (final g in groups) {
+      if ((g['id'] ?? '').toString() == id) {
+        g['name'] = newName;
+      }
+    }
+    await box.put('groups', groups);
+    await box.put('lastGroupName', newName);
+    await box.put('lastGroupId', id);
+
+    // Persist to Firestore (best-effort)
+    final userId = await _currentUserId();
+    if (userId != null && userId.isNotEmpty) {
+      try {
+        await _trackingGroupsRef(userId).doc(id).set({
+          'id': id,
+          'name': newName,
+          'updatedAt': DateTime.now().toIso8601String(),
+        }, SetOptions(merge: true));
+      } catch (_) {}
+    }
+    await _loadTrackingGroupMeta();
+  }
+
+  Future<String?> _pickTrackingGroup(
+    List<Map<String, String>> active,
+    List<Map<String, String>> ended,
+  ) async {
+    return await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        Widget sectionHeader(String text) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Colors.grey[700],
+              ),
+            ),
+          );
+        }
+
+        Widget itemTile(Map<String, String> g, {required bool isEnded}) {
+          return ListTile(
+            title: Text(g['name'] ?? ''),
+            trailing:
+                isEnded
+                    ? Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        tr('ended'),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    )
+                    : null,
+            onTap: () => Navigator.pop(ctx, g['id']),
+          );
+        }
+
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        tr('select_tracking_group'),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    if (active.isNotEmpty) ...[
+                      sectionHeader(tr('active_trackings')),
+                      ...active.map((g) => itemTile(g, isEnded: false)),
+                    ],
+                    if (ended.isNotEmpty) ...[
+                      sectionHeader(tr('ended_trackings')),
+                      ...ended.map((g) => itemTile(g, isEnded: true)),
+                      const SizedBox(height: 8),
+                    ],
+                    if (active.isEmpty && ended.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(tr('no_tracking_groups')),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _loadSelectedRangeIndex();
+    _loadSelectedTrackingGroupId();
+    _loadTrackingGroupMeta();
+  }
+
+  Future<void> _loadSelectedTrackingGroupId() async {
+    try {
+      final box = await Hive.openBox('trackingBox');
+      final v = box.get('selectedTrackingGroupId');
+      if (v is String && v.isNotEmpty) {
+        setState(() => _selectedTrackingGroupId = v);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveSelectedTrackingGroupId(String? id) async {
+    try {
+      final box = await Hive.openBox('trackingBox');
+      await box.put('selectedTrackingGroupId', id ?? '');
+    } catch (_) {}
+  }
+
+  Map<String, String>? _groupKeyFromSession(Map<String, dynamic> s) {
+    final rawId = (s['trackingGroupId'] ?? '').toString();
+    if (rawId.isEmpty) return null; // ignore ungrouped legacy entries
+    final rawName = (s['trackingGroupName'] ?? '').toString();
+    return {'id': rawId, 'name': rawName.isEmpty ? rawId : rawName};
+  }
+
+  String _overallGroupTrend(List<Map<String, dynamic>> sessions) {
+    // Simple, explainable metric: compare total real-disease detections in first half vs second half.
+    if (sessions.length < 2) return tr('trend_stable');
+    final sorted = [...sessions];
+    sorted.sort((a, b) {
+      final da = DateTime.tryParse((a['date'] ?? '').toString());
+      final db = DateTime.tryParse((b['date'] ?? '').toString());
+      if (da == null && db == null) return 0;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return da.compareTo(db);
+    });
+
+    int _diseaseDetectionsForSession(Map<String, dynamic> sess) {
+      int count = 0;
+      final images = (sess['images'] as List?) ?? const [];
+      for (final img in images) {
+        if (img is! Map) continue;
+        final results = (img['results'] as List?) ?? const [];
+        for (final r in results) {
+          if (r is! Map) continue;
+          final label = (r['disease'] ?? '').toString().toLowerCase();
+          if (label == 'unknown' || label == 'tip_burn') continue;
+          if (label == 'healthy') continue;
+          if (TrackingModels.isRealDisease(label)) count++;
+        }
+      }
+      return count;
+    }
+
+    final half = (sorted.length / 2).ceil();
+    double a = 0;
+    double b = 0;
+    for (int i = 0; i < sorted.length; i++) {
+      final v = _diseaseDetectionsForSession(sorted[i]).toDouble();
+      if (i < half) {
+        a += v;
+      } else {
+        b += v;
+      }
+    }
+    final aAvg = a / half;
+    final bAvg = b / (sorted.length - half);
+    final diff = bAvg - aAvg;
+    if (diff <= -1.0) return tr('trend_improving');
+    if (diff >= 1.0) return tr('trend_declining');
+    return tr('trend_stable');
   }
 
   Future<void> _loadSelectedRangeIndex() async {
@@ -73,12 +452,14 @@ class _TrackingPageState extends State<TrackingPage> {
     );
   }
 
+  // ignore: unused_element
   Future<void> _saveMonthly(int year, int month) async {
     final box = await Hive.openBox('trackingBox');
     await box.put('monthlyYear', year);
     await box.put('monthlyMonth', month);
   }
 
+  // ignore: unused_element
   Future<DateTime?> _showMonthYearPicker({
     required BuildContext context,
     required DateTime initialDate,
@@ -253,6 +634,7 @@ class _TrackingPageState extends State<TrackingPage> {
     );
   }
 
+  // ignore: unused_element
   Future<void> _pickCustomRange() async {
     final initialRange =
         _customStartDate != null && _customEndDate != null
@@ -278,27 +660,7 @@ class _TrackingPageState extends State<TrackingPage> {
     }
   }
 
-  String _getTimeRangeLabel(int index) {
-    switch (index) {
-      case 0:
-        return tr('last_7_days');
-      case 1:
-        if (_monthlyYear != null && _monthlyMonth != null) {
-          final dt = DateTime(_monthlyYear!, _monthlyMonth!, 1);
-          return DateFormat('MMMM yyyy').format(dt);
-        }
-        return tr('monthly');
-      case 2:
-        if (_customStartDate != null && _customEndDate != null) {
-          final s = DateFormat('MMM d').format(_customStartDate!);
-          final e = DateFormat('MMM d').format(_customEndDate!);
-          return '${tr('custom')}: $s – $e';
-        }
-        return tr('custom');
-      default:
-        return tr('last_7_days');
-    }
-  }
+  // Time range labels removed; tracking is group-based.
 
   Future<List<Map<String, dynamic>>> _loadSessionsWithFallback(
     String userId,
@@ -321,6 +683,10 @@ class _TrackingPageState extends State<TrackingPage> {
       final cloudSessions =
           trackingQuery.docs
               .map((doc) => Map<String, dynamic>.from(doc.data()))
+              .where((s) {
+                final src = (s['source'] ?? s['status'] ?? '').toString();
+                return src == 'completed' || src == 'reviewed';
+              })
               .toList();
 
       // Build scan requests list but skip those with status 'tracking' to avoid duplicates
@@ -330,6 +696,10 @@ class _TrackingPageState extends State<TrackingPage> {
         final status = (data['status'] ?? 'pending').toString();
         if (status == 'tracking') {
           // This entry is also present in 'tracking' collection; skip to prevent duplicates
+          continue;
+        }
+        // Only expert-validated entries matter for treatment progress monitoring groups
+        if (status != 'completed' && status != 'reviewed') {
           continue;
         }
         scanRequests.add({
@@ -342,6 +712,8 @@ class _TrackingPageState extends State<TrackingPage> {
           'userName': data['userName'] ?? '',
           'expertReview': data['expertReview'],
           'expertName': data['expertName'],
+          'trackingGroupId': data['trackingGroupId'],
+          'trackingGroupName': data['trackingGroupName'],
         });
       }
 
@@ -382,6 +754,7 @@ class _TrackingPageState extends State<TrackingPage> {
     }
   }
 
+  // ignore: unused_element
   Widget _buildStatusCard(String label, int count, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -661,83 +1034,7 @@ class _TrackingPageState extends State<TrackingPage> {
               ),
             ),
           ],
-          // Recommendations
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey[200]!),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.lightbulb_outline,
-                      color: Colors.amber[700],
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      tr('recommendations'),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[800],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                if (healthPercentage >= 80) ...[
-                  _buildRecommendationItem(tr('rec_excellent_maintain')),
-                  _buildRecommendationItem(tr('rec_excellent_monitor')),
-                ] else if (healthPercentage >= 60) ...[
-                  _buildRecommendationItem(tr('rec_good_continue')),
-                  if (topDisease != null)
-                    _buildRecommendationItem(
-                      tr(
-                        'rec_good_watch',
-                        namedArgs: {
-                          'disease': TrackingModels.formatLabel(topDisease),
-                        },
-                      ),
-                    ),
-                ] else if (healthPercentage >= 40) ...[
-                  _buildRecommendationItem(tr('rec_moderate_action')),
-                  if (topDisease != null)
-                    _buildRecommendationItem(
-                      tr(
-                        'rec_moderate_treat',
-                        namedArgs: {
-                          'disease': TrackingModels.formatLabel(topDisease),
-                        },
-                      ),
-                    ),
-                  _buildRecommendationItem(tr('rec_moderate_expert')),
-                ] else if (healthPercentage >= 20) ...[
-                  _buildRecommendationItem(tr('rec_poor_urgent')),
-                  if (topDisease != null)
-                    _buildRecommendationItem(
-                      tr(
-                        'rec_poor_focus',
-                        namedArgs: {
-                          'disease': TrackingModels.formatLabel(topDisease),
-                        },
-                      ),
-                    ),
-                  _buildRecommendationItem(tr('rec_poor_consult')),
-                ] else ...[
-                  _buildRecommendationItem(tr('rec_critical_immediate')),
-                  _buildRecommendationItem(tr('rec_critical_expert')),
-                  _buildRecommendationItem(tr('rec_critical_isolate')),
-                ],
-              ],
-            ),
-          ),
+          // Recommendations removed: Tracking is focused on progress (improving/stable/declining)
         ],
       ),
     );
@@ -830,19 +1127,9 @@ class _TrackingPageState extends State<TrackingPage> {
                       style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                     ),
                     const SizedBox(height: 16),
+                    _buildRecommendationItem(tr('tracking_desc_bullet_group')),
                     _buildRecommendationItem(
-                      tr(
-                        'tracking_desc_bullet_range',
-                        namedArgs: {
-                          'range': _getTimeRangeLabel(_selectedRangeIndex),
-                        },
-                      ),
-                    ),
-                    _buildRecommendationItem(
-                      tr('tracking_desc_bullet_health'),
-                    ),
-                    _buildRecommendationItem(
-                      tr('tracking_desc_bullet_pie'),
+                      tr('tracking_desc_bullet_progress'),
                     ),
                     _buildRecommendationItem(
                       tr('tracking_desc_bullet_history'),
@@ -1074,6 +1361,7 @@ class _TrackingPageState extends State<TrackingPage> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildCombinedTrendAnalysis(
     List<Map<String, dynamic>> chartData,
     Map<String, int> overallCounts,
@@ -1421,6 +1709,7 @@ class _TrackingPageState extends State<TrackingPage> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildDiseaseRow(
     String name,
     int count,
@@ -1509,6 +1798,8 @@ class _TrackingPageState extends State<TrackingPage> {
     final sourceColor = TrackingModels.getSourceColor(session['source']);
     final expertReview = session['expertReview'] as Map<String, dynamic>?;
     final expertName = session['expertName'] as String?;
+    final additionalTreatment =
+        (expertReview?['comment'] ?? '').toString().trim();
     // Build overall detected labels for this report (no per-image percentages)
     final Set<String> overallDetected = <String>{};
     final List<dynamic> diseaseSummary =
@@ -1667,10 +1958,10 @@ class _TrackingPageState extends State<TrackingPage> {
                                       ),
                                     ),
                                   ],
-                                  if (expertReview['comment'] != null) ...[
+                                  if (additionalTreatment.isNotEmpty) ...[
                                     const SizedBox(height: 8),
                                     Text(
-                                      tr('comment'),
+                                      tr('additional_treatment'),
                                       style: const TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w500,
@@ -1678,7 +1969,7 @@ class _TrackingPageState extends State<TrackingPage> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      expertReview['comment'],
+                                      additionalTreatment,
                                       style: const TextStyle(fontSize: 14),
                                     ),
                                   ],
@@ -2032,8 +2323,54 @@ class _TrackingPageState extends State<TrackingPage> {
         // Save to Hive for offline use
         Hive.openBox('trackingBox').then((box) => box.put('scans', sessions));
 
+        // Build tracking-group list from sessions (including legacy "Ungrouped")
+        final Map<String, String> groupMap = {};
+        for (final s in sessions) {
+          final g = _groupKeyFromSession(s);
+          if (g == null) continue;
+          groupMap[g['id']!] = g['name']!;
+        }
+        final activeGroups = <Map<String, String>>[];
+        final endedGroups = <Map<String, String>>[];
+        for (final e in groupMap.entries) {
+          final id = e.key;
+          final baseName = _groupNames[id] ?? e.value;
+          final ended = _isGroupEnded(id);
+          final item = {'id': id, 'name': baseName};
+          if (ended) {
+            endedGroups.add(item);
+          } else {
+            activeGroups.add(item);
+          }
+        }
+        activeGroups.sort((a, b) => a['name']!.compareTo(b['name']!));
+        endedGroups.sort((a, b) => a['name']!.compareTo(b['name']!));
+
+        // For compatibility with existing code below that expects "groups"
+        final groups = [...activeGroups, ...endedGroups]
+          ..sort((a, b) => a['name']!.compareTo(b['name']!));
+
+        if (_selectedTrackingGroupId == null &&
+            (activeGroups.isNotEmpty || endedGroups.isNotEmpty)) {
+          _selectedTrackingGroupId =
+              activeGroups.isNotEmpty
+                  ? activeGroups.first['id']
+                  : endedGroups.first['id'];
+          _saveSelectedTrackingGroupId(_selectedTrackingGroupId);
+        }
+
+        final groupId = _selectedTrackingGroupId;
+        final sessionsByGroup =
+            groupId == null
+                ? sessions
+                : sessions.where((s) {
+                  final g = _groupKeyFromSession(s);
+                  return g != null && g['id'] == groupId;
+                }).toList();
+
+        // Apply time-range filter within the selected tracking group
         final filteredSessions = TrackingModels.filterSessions(
-          sessions,
+          sessionsByGroup,
           _selectedRangeIndex,
           customStart: _customStartDate,
           customEnd: _customEndDate,
@@ -2041,15 +2378,7 @@ class _TrackingPageState extends State<TrackingPage> {
           monthlyMonth: _monthlyMonth,
         );
         final flatScans = TrackingModels.flattenScans(filteredSessions);
-        final chartData = TrackingChart.chartDataPercentBinned(
-          flatScans,
-          _selectedRangeIndex,
-          customStart: _customStartDate,
-          customEnd: _customEndDate,
-          monthlyYear: _monthlyYear,
-          monthlyMonth: _monthlyMonth,
-          bins: 6,
-        );
+        // chart data not needed (group-based overall progress only)
         final overallCounts = TrackingModels.overallHealthyAndDiseases(
           flatScans,
         );
@@ -2059,6 +2388,7 @@ class _TrackingPageState extends State<TrackingPage> {
           (sum, d) => sum + (overallCounts[d] ?? 0),
         );
         final total = healthy + totalDiseased;
+        final overallTrendLabel = _overallGroupTrend(sessionsByGroup);
 
         return Scaffold(
           body: SingleChildScrollView(
@@ -2068,7 +2398,8 @@ class _TrackingPageState extends State<TrackingPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildTrackingDescriptionLink(),
-                  // Time range selector
+                  const SizedBox(height: 12),
+                  // Tracking group selector + end action
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -2078,24 +2409,13 @@ class _TrackingPageState extends State<TrackingPage> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.grey[300]!, width: 1),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
-                          blurRadius: 4,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
                     ),
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.calendar_today,
-                          size: 20,
-                          color: Colors.green[700],
-                        ),
+                        Icon(Icons.layers, size: 20, color: Colors.green[700]),
                         const SizedBox(width: 12),
                         Text(
-                          tr('time_range'),
+                          tr('tracking_group'),
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 16,
@@ -2103,74 +2423,187 @@ class _TrackingPageState extends State<TrackingPage> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: DropdownButton<int>(
-                            value: _selectedRangeIndex,
-                            isExpanded: true,
-                            underline: const SizedBox.shrink(),
-                            items: [
-                              DropdownMenuItem(
-                                value: 0,
-                                child: Text(
-                                  _getTimeRangeLabel(0),
-                                  style: const TextStyle(fontSize: 15),
-                                ),
-                              ),
-                              DropdownMenuItem(
-                                value: 1,
-                                child: Text(
-                                  _getTimeRangeLabel(1),
-                                  style: const TextStyle(fontSize: 15),
-                                ),
-                              ),
-                              DropdownMenuItem(
-                                value: 2,
-                                child: Text(
-                                  _getTimeRangeLabel(2),
-                                  style: const TextStyle(fontSize: 15),
-                                ),
-                              ),
-                            ],
-                            onChanged: (i) async {
-                              if (i == null) return;
-                              if (i == 1) {
-                                // Show custom month-year picker
-                                final now = DateTime.now();
-                                final picked = await _showMonthYearPicker(
-                                  context: context,
-                                  initialDate: DateTime(
-                                    _monthlyYear ?? now.year,
-                                    _monthlyMonth ?? now.month,
-                                    1,
-                                  ),
-                                  firstDate: DateTime(2020, 1),
-                                  lastDate: DateTime(now.year, now.month),
-                                );
-                                if (picked != null) {
-                                  setState(() {
-                                    _monthlyYear = picked.year;
-                                    _monthlyMonth = picked.month;
-                                    _selectedRangeIndex = 1;
-                                  });
-                                  await _saveSelectedRangeIndex(1);
-                                  await _saveMonthly(picked.year, picked.month);
-                                } else {
-                                  // User cancelled, revert to previous selection
-                                  setState(() {});
-                                }
-                              } else if (i == 2) {
-                                await _pickCustomRange();
-                                // Force rebuild to show updated selection
-                                setState(() {});
-                              } else {
-                                setState(() => _selectedRangeIndex = i);
-                                await _saveSelectedRangeIndex(i);
-                              }
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () async {
+                              final picked = await _pickTrackingGroup(
+                                activeGroups,
+                                endedGroups,
+                              );
+                              if (picked == null) return;
+                              setState(() => _selectedTrackingGroupId = picked);
+                              await _saveSelectedTrackingGroupId(picked);
                             },
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    groups.firstWhere(
+                                          (g) =>
+                                              g['id'] ==
+                                              _selectedTrackingGroupId,
+                                          orElse: () => {'name': ''},
+                                        )['name'] ??
+                                        '',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(
+                                  Icons.arrow_drop_down,
+                                  color: Colors.grey[700],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        IconButton(
+                          tooltip: tr('rename_tracking'),
+                          icon: Icon(
+                            Icons.edit_outlined,
+                            color:
+                                _selectedTrackingGroupId == null
+                                    ? Colors.grey[400]
+                                    : Colors.blueGrey[700],
+                          ),
+                          onPressed:
+                              _selectedTrackingGroupId == null
+                                  ? null
+                                  : () async {
+                                    final id = _selectedTrackingGroupId!;
+                                    final current =
+                                        _groupNames[id] ??
+                                        (groups.firstWhere(
+                                                  (g) => g['id'] == id,
+                                                  orElse: () => {'name': ''},
+                                                )['name'] ??
+                                                '')
+                                            .toString();
+                                    await _renameTrackingGroup(id, current);
+                                  },
+                        ),
+                        const SizedBox(width: 2),
+                        IconButton(
+                          tooltip: tr('end_tracking'),
+                          icon: Icon(
+                            Icons.stop_circle_outlined,
+                            color:
+                                (_selectedTrackingGroupId == null ||
+                                        _isGroupEnded(_selectedTrackingGroupId))
+                                    ? Colors.grey[400]
+                                    : Colors.red[700],
+                          ),
+                          onPressed:
+                              (_selectedTrackingGroupId == null ||
+                                      _isGroupEnded(_selectedTrackingGroupId))
+                                  ? null
+                                  : () async {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder:
+                                          (ctx) => AlertDialog(
+                                            title: Text(tr('end_tracking')),
+                                            content: Text(
+                                              tr('end_tracking_warning'),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed:
+                                                    () => Navigator.pop(
+                                                      ctx,
+                                                      false,
+                                                    ),
+                                                child: Text(tr('cancel')),
+                                              ),
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      Colors.red[700],
+                                                  foregroundColor: Colors.white,
+                                                ),
+                                                onPressed:
+                                                    () => Navigator.pop(
+                                                      ctx,
+                                                      true,
+                                                    ),
+                                                child: Text(tr('end')),
+                                              ),
+                                            ],
+                                          ),
+                                    );
+                                    if (confirm == true &&
+                                        _selectedTrackingGroupId != null) {
+                                      final id = _selectedTrackingGroupId!;
+                                      final currentName =
+                                          _groupNames[id] ??
+                                          (groups.firstWhere(
+                                                    (g) => g['id'] == id,
+                                                    orElse: () => {'name': ''},
+                                                  )['name'] ??
+                                                  '')
+                                              .toString();
+                                      await _endTrackingGroup(
+                                        id,
+                                        name: currentName,
+                                      );
+                                      if (!mounted) return;
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            tr('end_tracking_success'),
+                                          ),
+                                          backgroundColor: Colors.green,
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    }
+                                  },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Overall trend badge for the selected group
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[300]!, width: 1),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          overallTrendLabel == tr('trend_improving')
+                              ? Icons.trending_down
+                              : overallTrendLabel == tr('trend_declining')
+                              ? Icons.trending_up
+                              : Icons.trending_flat,
+                          color:
+                              overallTrendLabel == tr('trend_improving')
+                                  ? Colors.green[700]
+                                  : overallTrendLabel == tr('trend_declining')
+                                  ? Colors.red[700]
+                                  : Colors.grey[700],
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            tr(
+                              'tracking_group_trend',
+                              namedArgs: {'trend': overallTrendLabel},
+                            ),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                         ),
                       ],
                     ),
                   ),
+                  // Time range selector removed: tracking is based on Tracking Group
                   const SizedBox(height: 16),
                   // Compact Health Card
                   _buildCompactHealthCard(
@@ -2182,6 +2615,7 @@ class _TrackingPageState extends State<TrackingPage> {
                   const SizedBox(height: 16),
                   // Distribution Chart
                   _buildDistributionChart(overallCounts, total),
+                  // Disease-specific trend analysis removed (only show overall tracking progress)
                   const SizedBox(height: 24),
                   Text(
                     tr('history'),
@@ -2192,7 +2626,14 @@ class _TrackingPageState extends State<TrackingPage> {
                     tr(
                       'scans_from_period',
                       namedArgs: {
-                        'period': _getTimeRangeLabel(_selectedRangeIndex),
+                        'period':
+                            (groups.firstWhere(
+                                      (g) =>
+                                          g['id'] == _selectedTrackingGroupId,
+                                      orElse: () => {'name': ''},
+                                    )['name'] ??
+                                    '')
+                                .toString(),
                       },
                     ),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(

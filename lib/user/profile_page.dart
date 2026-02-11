@@ -1548,19 +1548,24 @@ class _ProfilePageState extends State<ProfilePage> {
     final ValueNotifier<bool> hideCurrent = ValueNotifier<bool>(true);
     final ValueNotifier<bool> hideNew = ValueNotifier<bool>(true);
     final ValueNotifier<bool> hideConfirm = ValueNotifier<bool>(true);
-    
+
     // Password strength tracking
     final ValueNotifier<String> passwordStrength = ValueNotifier<String>('');
-    final ValueNotifier<Color> passwordStrengthColor = ValueNotifier<Color>(Colors.grey);
-    
+    final ValueNotifier<Color> passwordStrengthColor = ValueNotifier<Color>(
+      Colors.grey,
+    );
+
     void calculatePasswordStrength(String password) {
       bool hasLength = password.length >= 8;
       bool hasUppercase = password.contains(RegExp(r'[A-Z]'));
       bool hasLowercase = password.contains(RegExp(r'[a-z]'));
       bool hasNumber = password.contains(RegExp(r'[0-9]'));
-      bool hasSpecialChar = password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+      bool hasSpecialChar = password.contains(
+        RegExp(r'[!@#$%^&*(),.?":{}|<>]'),
+      );
 
-      bool meetsRequirements = hasLength && hasUppercase && hasLowercase && hasNumber;
+      bool meetsRequirements =
+          hasLength && hasUppercase && hasLowercase && hasNumber;
 
       if (!hasLength || (!hasUppercase && !hasLowercase && !hasNumber)) {
         passwordStrength.value = 'Weak';
@@ -1570,7 +1575,8 @@ class _ProfilePageState extends State<ProfilePage> {
         passwordStrengthColor.value = Colors.orange;
       } else {
         passwordStrength.value = hasSpecialChar ? 'Strong' : 'Good';
-        passwordStrengthColor.value = hasSpecialChar ? Colors.green : Colors.lightGreen;
+        passwordStrengthColor.value =
+            hasSpecialChar ? Colors.green : Colors.lightGreen;
       }
     }
 
@@ -1588,291 +1594,315 @@ class _ProfilePageState extends State<ProfilePage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        tr('change_password'),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  ValueListenableBuilder<bool>(
-                    valueListenable: hideCurrent,
-                    builder:
-                        (context, hidden, _) => TextField(
-                          controller: currentPasswordController,
-                          obscureText: hidden,
-                          decoration: InputDecoration(
-                            labelText: tr('current_password'),
-                            prefixIcon: const Icon(Icons.lock_outline),
-                            border: const OutlineInputBorder(),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                hidden
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                              ),
-                              onPressed: () => hideCurrent.value = !hidden,
-                            ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          tr('change_password'),
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                  ),
-                  const SizedBox(height: 12),
-                  ValueListenableBuilder<bool>(
-                    valueListenable: hideNew,
-                    builder:
-                        (context, hidden, _) => TextField(
-                          controller: newPasswordController,
-                          obscureText: hidden,
-                          onChanged: (value) => calculatePasswordStrength(value),
-                          decoration: InputDecoration(
-                            labelText: tr('new_password'),
-                            prefixIcon: const Icon(Icons.lock),
-                            border: const OutlineInputBorder(),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                hidden
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                              ),
-                              onPressed: () => hideNew.value = !hidden,
-                            ),
-                          ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
                         ),
-                  ),
-                  // Password Strength Indicator
-                  ValueListenableBuilder<String>(
-                    valueListenable: passwordStrength,
-                    builder: (context, strength, _) {
-                      if (newPasswordController.text.isEmpty) {
-                        return const SizedBox.shrink();
-                      }
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 8, left: 12),
-                        child: Row(
-                          children: [
-                            Text(
-                              'Password Strength: ',
-                              style: TextStyle(color: Colors.grey[700], fontSize: 12),
-                            ),
-                            ValueListenableBuilder<Color>(
-                              valueListenable: passwordStrengthColor,
-                              builder: (context, color, _) => Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: color, width: 1),
-                                ),
-                                child: Text(
-                                  strength,
-                                  style: TextStyle(
-                                    color: color,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  ValueListenableBuilder<bool>(
-                    valueListenable: hideConfirm,
-                    builder:
-                        (context, hidden, _) => TextField(
-                          controller: confirmPasswordController,
-                          obscureText: hidden,
-                          decoration: InputDecoration(
-                            labelText: tr('confirm_new_password'),
-                            prefixIcon: const Icon(Icons.lock),
-                            border: const OutlineInputBorder(),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                hidden
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                              ),
-                              onPressed: () => hideConfirm.value = !hidden,
-                            ),
-                          ),
-                        ),
-                  ),
-                  const SizedBox(height: 16),
-                  ValueListenableBuilder<String?>(
-                    valueListenable: errorNotifier,
-                    builder:
-                        (context, error, child) =>
-                            error == null
-                                ? const SizedBox.shrink()
-                                : Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: Text(
-                                    error,
-                                    style: const TextStyle(color: Colors.red),
-                                  ),
-                                ),
-                  ),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ValueListenableBuilder<bool>(
-                      valueListenable: isLoadingNotifier,
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: hideCurrent,
                       builder:
-                          (context, isLoading, child) => ElevatedButton(
-                            onPressed:
-                                isLoading
-                                    ? null
-                                    : () async {
-                                      final current =
-                                          currentPasswordController.text;
-                                      final newPass =
-                                          newPasswordController.text;
-                                      final confirm =
-                                          confirmPasswordController.text;
-
-                                      if (current.isEmpty ||
-                                          newPass.isEmpty ||
-                                          confirm.isEmpty) {
-                                        errorNotifier.value = tr(
-                                          'all_fields_required',
-                                        );
-                                        return;
-                                      }
-
-                                      if (newPass != confirm) {
-                                        errorNotifier.value = tr(
-                                          'new_passwords_do_not_match',
-                                        );
-                                        return;
-                                      }
-
-                                      // Enhanced password validation
-                                      if (newPass.length < 8) {
-                                        errorNotifier.value = 'Password must be at least 8 characters';
-                                        return;
-                                      }
-                                      
-                                      if (!newPass.contains(RegExp(r'[A-Z]'))) {
-                                        errorNotifier.value = 'Password must contain at least one uppercase letter';
-                                        return;
-                                      }
-                                      
-                                      if (!newPass.contains(RegExp(r'[a-z]'))) {
-                                        errorNotifier.value = 'Password must contain at least one lowercase letter';
-                                        return;
-                                      }
-                                      
-                                      if (!newPass.contains(RegExp(r'[0-9]'))) {
-                                        errorNotifier.value = 'Password must contain at least one number';
-                                        return;
-                                      }
-
-                                      isLoadingNotifier.value = true;
-                                      errorNotifier.value = null;
-
-                                      try {
-                                        final user =
-                                            FirebaseAuth.instance.currentUser;
-                                        if (user != null &&
-                                            user.email != null) {
-                                          // Re-authenticate user with current password
-                                          final credential =
-                                              EmailAuthProvider.credential(
-                                                email: user.email!,
-                                                password: current,
-                                              );
-                                          await user
-                                              .reauthenticateWithCredential(
-                                                credential,
-                                              );
-
-                                          // Update password
-                                          await user.updatePassword(newPass);
-
-                                          Navigator.pop(context);
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                tr(
-                                                  'password_changed_successfully',
-                                                ),
-                                              ),
-                                              backgroundColor: Colors.green,
-                                            ),
-                                          );
-                                        }
-                                      } on FirebaseAuthException catch (e) {
-                                        String errorMessage = tr(
-                                          'error_changing_password',
-                                        );
-                                        if (e.code == 'wrong-password') {
-                                          errorMessage = tr(
-                                            'current_password_incorrect',
-                                          );
-                                        } else if (e.code == 'weak-password') {
-                                          errorMessage = tr(
-                                            'new_password_too_weak',
-                                          );
-                                        } else if (e.code ==
-                                            'requires-recent-login') {
-                                          errorMessage = tr(
-                                            'please_relogin_change_password',
-                                          );
-                                        }
-                                        errorNotifier.value = errorMessage;
-                                      } catch (e) {
-                                        errorNotifier.value = tr(
-                                          'unexpected_error_occurred',
-                                        );
-                                      } finally {
-                                        isLoadingNotifier.value = false;
-                                      }
-                                    },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                          (context, hidden, _) => TextField(
+                            controller: currentPasswordController,
+                            obscureText: hidden,
+                            decoration: InputDecoration(
+                              labelText: tr('current_password'),
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              border: const OutlineInputBorder(),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  hidden
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                ),
+                                onPressed: () => hideCurrent.value = !hidden,
                               ),
                             ),
-                            child:
-                                isLoading
-                                    ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
-                                      ),
-                                    )
-                                    : Text(
-                                      tr('change_password'),
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
                           ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: hideNew,
+                      builder:
+                          (context, hidden, _) => TextField(
+                            controller: newPasswordController,
+                            obscureText: hidden,
+                            onChanged:
+                                (value) => calculatePasswordStrength(value),
+                            decoration: InputDecoration(
+                              labelText: tr('new_password'),
+                              prefixIcon: const Icon(Icons.lock),
+                              border: const OutlineInputBorder(),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  hidden
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                ),
+                                onPressed: () => hideNew.value = !hidden,
+                              ),
+                            ),
+                          ),
+                    ),
+                    // Password Strength Indicator
+                    ValueListenableBuilder<String>(
+                      valueListenable: passwordStrength,
+                      builder: (context, strength, _) {
+                        if (newPasswordController.text.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 8, left: 12),
+                          child: Row(
+                            children: [
+                              Text(
+                                'Password Strength: ',
+                                style: TextStyle(
+                                  color: Colors.grey[700],
+                                  fontSize: 12,
+                                ),
+                              ),
+                              ValueListenableBuilder<Color>(
+                                valueListenable: passwordStrengthColor,
+                                builder:
+                                    (context, color, _) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                          color: color,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        strength,
+                                        style: TextStyle(
+                                          color: color,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: hideConfirm,
+                      builder:
+                          (context, hidden, _) => TextField(
+                            controller: confirmPasswordController,
+                            obscureText: hidden,
+                            decoration: InputDecoration(
+                              labelText: tr('confirm_new_password'),
+                              prefixIcon: const Icon(Icons.lock),
+                              border: const OutlineInputBorder(),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  hidden
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                ),
+                                onPressed: () => hideConfirm.value = !hidden,
+                              ),
+                            ),
+                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    ValueListenableBuilder<String?>(
+                      valueListenable: errorNotifier,
+                      builder:
+                          (context, error, child) =>
+                              error == null
+                                  ? const SizedBox.shrink()
+                                  : Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Text(
+                                      error,
+                                      style: const TextStyle(color: Colors.red),
+                                    ),
+                                  ),
+                    ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ValueListenableBuilder<bool>(
+                        valueListenable: isLoadingNotifier,
+                        builder:
+                            (context, isLoading, child) => ElevatedButton(
+                              onPressed:
+                                  isLoading
+                                      ? null
+                                      : () async {
+                                        final current =
+                                            currentPasswordController.text;
+                                        final newPass =
+                                            newPasswordController.text;
+                                        final confirm =
+                                            confirmPasswordController.text;
+
+                                        if (current.isEmpty ||
+                                            newPass.isEmpty ||
+                                            confirm.isEmpty) {
+                                          errorNotifier.value = tr(
+                                            'all_fields_required',
+                                          );
+                                          return;
+                                        }
+
+                                        if (newPass != confirm) {
+                                          errorNotifier.value = tr(
+                                            'new_passwords_do_not_match',
+                                          );
+                                          return;
+                                        }
+
+                                        // Enhanced password validation
+                                        if (newPass.length < 8) {
+                                          errorNotifier.value =
+                                              'Password must be at least 8 characters';
+                                          return;
+                                        }
+
+                                        if (!newPass.contains(
+                                          RegExp(r'[A-Z]'),
+                                        )) {
+                                          errorNotifier.value =
+                                              'Password must contain at least one uppercase letter';
+                                          return;
+                                        }
+
+                                        if (!newPass.contains(
+                                          RegExp(r'[a-z]'),
+                                        )) {
+                                          errorNotifier.value =
+                                              'Password must contain at least one lowercase letter';
+                                          return;
+                                        }
+
+                                        if (!newPass.contains(
+                                          RegExp(r'[0-9]'),
+                                        )) {
+                                          errorNotifier.value =
+                                              'Password must contain at least one number';
+                                          return;
+                                        }
+
+                                        isLoadingNotifier.value = true;
+                                        errorNotifier.value = null;
+
+                                        try {
+                                          final user =
+                                              FirebaseAuth.instance.currentUser;
+                                          if (user != null &&
+                                              user.email != null) {
+                                            // Re-authenticate user with current password
+                                            final credential =
+                                                EmailAuthProvider.credential(
+                                                  email: user.email!,
+                                                  password: current,
+                                                );
+                                            await user
+                                                .reauthenticateWithCredential(
+                                                  credential,
+                                                );
+
+                                            // Update password
+                                            await user.updatePassword(newPass);
+
+                                            Navigator.pop(context);
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  tr(
+                                                    'password_changed_successfully',
+                                                  ),
+                                                ),
+                                                backgroundColor: Colors.green,
+                                              ),
+                                            );
+                                          }
+                                        } on FirebaseAuthException catch (e) {
+                                          String errorMessage = tr(
+                                            'error_changing_password',
+                                          );
+                                          if (e.code == 'wrong-password') {
+                                            errorMessage = tr(
+                                              'current_password_incorrect',
+                                            );
+                                          } else if (e.code ==
+                                              'weak-password') {
+                                            errorMessage = tr(
+                                              'new_password_too_weak',
+                                            );
+                                          } else if (e.code ==
+                                              'requires-recent-login') {
+                                            errorMessage = tr(
+                                              'please_relogin_change_password',
+                                            );
+                                          }
+                                          errorNotifier.value = errorMessage;
+                                        } catch (e) {
+                                          errorNotifier.value = tr(
+                                            'unexpected_error_occurred',
+                                          );
+                                        } finally {
+                                          isLoadingNotifier.value = false;
+                                        }
+                                      },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child:
+                                  isLoading
+                                      ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
+                                              ),
+                                        ),
+                                      )
+                                      : Text(
+                                        tr('change_password'),
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                            ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
