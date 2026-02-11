@@ -2388,13 +2388,27 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                   // Disease Summary Section
                   Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Text(
-                      tr('disease_summary'),
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[800],
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tr('disease_summary'),
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          tr('confidence_note'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Container(

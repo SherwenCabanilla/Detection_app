@@ -3,6 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:image/image.dart' as img;
+import 'package:easy_localization/easy_localization.dart';
 
 import 'tflite_detector.dart';
 import 'detection_painter.dart';
@@ -374,13 +375,27 @@ class _DetectionScreenState extends State<DetectionScreen> {
           if (_results != null && _results!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Text(
-                'Found ${_results!.length} detection${_results!.length > 1 ? 's' : ''}',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green[800],
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Found ${_results!.length} detection${_results!.length > 1 ? 's' : ''}',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green[800],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    tr('confidence_note'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -401,9 +416,8 @@ class _DetectionScreenState extends State<DetectionScreen> {
                             Colors.grey,
                         child: Text('${index + 1}'),
                       ),
-                      title: Text(_formatLabel(result.label)),
-                      subtitle: Text(
-                        'Confidence: ${(result.confidence * 100).toStringAsFixed(1)}%',
+                      title: Text(
+                        '${_formatLabel(result.label)} (${(result.confidence * 100).toStringAsFixed(0)}%)',
                       ),
                     ),
                   );

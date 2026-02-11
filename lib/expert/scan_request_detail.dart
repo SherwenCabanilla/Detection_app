@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive/hive.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ScanRequestDetail extends StatefulWidget {
   final Map<String, dynamic> request;
@@ -350,7 +351,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            const Text('Show Bounding Boxes'),
+            Text(tr('show_bounding_boxes')),
             Switch(
               value: _showBoundingBoxes,
               onChanged: (value) async {
@@ -361,6 +362,17 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
               },
             ),
           ],
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            tr('confidence_note'),
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              fontStyle: FontStyle.italic,
+            ),
+          ),
         ),
         const SizedBox(height: 8),
         GridView.builder(
@@ -1192,6 +1204,15 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                        const SizedBox(height: 6),
+                        Text(
+                          tr('confidence_note'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
                         const SizedBox(height: 12),
                         if (healthyDetections.isNotEmpty)
                           ...healthyDetections.map((detection) {
@@ -1214,13 +1235,8 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                                     ),
                                   ),
                                 ),
-                                title: Text('Image ${imageIndex + 1}'),
-                                subtitle: Text(
-                                  'Confidence: ${(confidence * 100).toStringAsFixed(1)}%',
-                                  style: const TextStyle(
-                                    color: Colors.green,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                title: Text(
+                                  'Image ${imageIndex + 1} (${(confidence * 100).toStringAsFixed(0)}%)',
                                 ),
                                 trailing: IconButton(
                                   icon: const Icon(Icons.visibility, size: 20),
@@ -1375,10 +1391,21 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                        const SizedBox(height: 6),
+                        Text(
+                          tr('confidence_note'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
                         const SizedBox(height: 12),
                         // List of detections
                         ...detections.map((detection) {
                           final imageIndex = detection['imageIndex'] as int;
+                          final confidence =
+                              (detection['confidence'] as num?) ?? 0;
                           final color = _getDiseaseColor(diseaseName);
 
                           return Card(
@@ -1395,9 +1422,11 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                                   ),
                                 ),
                               ),
-                              title: Text('Image ${imageIndex + 1}'),
+                              title: Text(
+                                'Image ${imageIndex + 1} (${(confidence * 100).toStringAsFixed(0)}%)',
+                              ),
                               subtitle: Text(
-                                'Detection found',
+                                '${_formatExpertLabel(diseaseName)}',
                                 style: TextStyle(
                                   color: Colors.grey[600],
                                   fontWeight: FontWeight.w500,

@@ -25,6 +25,7 @@
   "reviewed": "Nirepaso:",
   "show_bounding_boxes": "Ipakita ang Bounding Boxes",
   "submitted_images": "Isinumiteng mga Larawan",
+  "confidence_note": "Paalala: Ang % ay kumpiyansa ng modelo sa natukoy na label (hindi kalubhaan).",
   "detections_one": "{count} Detection",
   "detections_other": "{count} Detections",
   "no_detections": "Walang Detection",

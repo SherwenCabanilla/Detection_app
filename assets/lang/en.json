@@ -25,6 +25,7 @@
   "reviewed": "Reviewed:",
   "show_bounding_boxes": "Show Bounding Boxes",
   "submitted_images": "Submitted Images",
+  "confidence_note": "Note: % shows the model confidence for the detected label (not severity).",
   "detections_one": "{count} Detection",
   "detections_other": "{count} Detections",
   "no_detections": "No Detections",

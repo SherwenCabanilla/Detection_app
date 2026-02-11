@@ -25,6 +25,7 @@
   "reviewed": "Gitan-aw:",
   "show_bounding_boxes": "Ipakita ang Bounding Boxes",
   "submitted_images": "Gisumiteng mga Hulagway",
+  "confidence_note": "Pahimangno: Ang % nagpasabot sa kumpiyansa sa modelo sa natukoy nga label (dili kalig-on sa sakit).",
   "detections_one": "{count} Detection",
   "detections_other": "{count} Detections",
   "no_detections": "Walay Detection",

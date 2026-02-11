@@ -863,6 +863,15 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      tr('confidence_note'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     // Toggle button for bounding boxes
                     Row(
