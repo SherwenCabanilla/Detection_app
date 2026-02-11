@@ -154,6 +154,15 @@ class _ScanRequestListState extends State<ScanRequestList>
     if (normalized == 'tip burn' || normalized == 'unknown') {
       return 'Unknown';
     }
+    if (normalized == 'healthy') {
+      return 'Healthy';
+    }
+    if (normalized == 'backterial blackspot' || normalized == 'bacterial blackspot') {
+      return 'Bacterial black spot';
+    }
+    if (normalized == 'powdery mildew') {
+      return 'Powdery Mildew';
+    }
     return disease
         .split('_')
         .map((word) => word[0].toUpperCase() + word.substring(1))
@@ -228,24 +237,57 @@ class _ScanRequestListState extends State<ScanRequestList>
   Widget _buildRequestCard(Map<String, dynamic> request) {
     final diseaseSummary = request['diseaseSummary'] as List<dynamic>;
 
-    // Find the dominant disease (highest count/percentage)
+    // Find the dominant disease/status to display (same logic as farmer side)
     String dominantDiseaseKey = 'unknown';
+    
     if (diseaseSummary.isNotEmpty) {
-      // Sort by count to find the dominant disease
-      final sortedDiseases = List<Map<String, dynamic>>.from(diseaseSummary);
-      sortedDiseases.sort((a, b) {
-        final countA = a['count'] as int? ?? 0;
-        final countB = b['count'] as int? ?? 0;
-        return countB.compareTo(countA); // Descending order
-      });
-
-      final dominantDisease = sortedDiseases.first;
-      dominantDiseaseKey =
-          (dominantDisease['label'] ??
-                  dominantDisease['disease'] ??
-                  dominantDisease['name'] ??
-                  'unknown')
-              .toString();
+      // Define valid diseases
+      const validDiseases = {
+        'anthracnose',
+        'bacterial blackspot',
+        'bacterial_blackspot',
+        'backterial_blackspot',
+        'powdery mildew',
+        'powdery_mildew',
+        'dieback',
+      };
+      
+      // First, try to find actual diseases
+      final diseaseItems = diseaseSummary.where((d) {
+        final rawDiseaseName = (d['disease'] ?? d['name'] ?? d['label'] ?? '').toString();
+        final normalizedName = rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
+        return validDiseases.contains(normalizedName) || 
+               validDiseases.contains(rawDiseaseName.toLowerCase());
+      }).toList();
+      
+      if (diseaseItems.isNotEmpty) {
+        // If diseases found, show the one with highest count
+        diseaseItems.sort((a, b) {
+          final countA = a['count'] as int? ?? 0;
+          final countB = b['count'] as int? ?? 0;
+          return countB.compareTo(countA);
+        });
+        dominantDiseaseKey = (diseaseItems.first['name'] ??
+                diseaseItems.first['disease'] ??
+                diseaseItems.first['label'] ??
+                'unknown')
+            .toString();
+      } else {
+        // No diseases found, check for healthy
+        final healthyItems = diseaseSummary.where((d) {
+          final rawDiseaseName = (d['disease'] ?? d['name'] ?? d['label'] ?? '').toString();
+          final normalizedName = rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
+          return normalizedName == 'healthy';
+        }).toList();
+        
+        if (healthyItems.isNotEmpty) {
+          // Show "healthy" if healthy leaves detected
+          dominantDiseaseKey = 'healthy';
+        } else {
+          // No diseases and no healthy - show unknown
+          dominantDiseaseKey = 'unknown';
+        }
+      }
     }
     final isCompleted =
         request['status'] == 'reviewed' || request['status'] == 'completed';

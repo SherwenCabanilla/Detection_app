@@ -274,5 +274,11 @@
   "diseases_decreasing": "Diseases Decreasing",
   "disease_trend_rec_single": "{disease} is spreading. Focus treatment efforts on this disease immediately.",
   "disease_trend_rec_multiple": "Multiple diseases are spreading. Prioritize treatment and consider expert review.",
-  "disease_trend_rec_decreasing": "Good news! Your treatment efforts are working. Continue current practices."
+  "disease_trend_rec_decreasing": "Good news! Your treatment efforts are working. Continue current practices.",
+  "most_common_disease": "Most Common Disease",
+  "disease_distribution": "Disease Distribution",
+  "diseased": "Diseased",
+  "total": "Total",
+  "health_status": "Health Status",
+  "not_healthy": "Not Healthy"
 }

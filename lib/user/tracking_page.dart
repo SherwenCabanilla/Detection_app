@@ -561,24 +561,6 @@ class _TrackingPageState extends State<TrackingPage> {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '$healthPercentage%',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: statusColor,
-                  ),
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -596,7 +578,7 @@ class _TrackingPageState extends State<TrackingPage> {
                   child: Column(
                     children: [
                       Text(
-                        healthy.toString(),
+                        '${(healthy / total * 100).toStringAsFixed(1)}%',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -616,7 +598,7 @@ class _TrackingPageState extends State<TrackingPage> {
                   child: Column(
                     children: [
                       Text(
-                        diseased.toString(),
+                        '${(diseased / total * 100).toStringAsFixed(1)}%',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -626,26 +608,6 @@ class _TrackingPageState extends State<TrackingPage> {
                       const SizedBox(height: 4),
                       Text(
                         tr('diseased'),
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(width: 1, height: 40, color: Colors.grey[300]),
-                Expanded(
-                  child: Column(
-                    children: [
-                      Text(
-                        total.toString(),
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[800],
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        tr('total'),
                         style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ],
@@ -685,7 +647,7 @@ class _TrackingPageState extends State<TrackingPage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${TrackingModels.formatLabel(topDisease)} (${topDiseaseCount} ${tr('cases')})',
+                          '${TrackingModels.formatLabel(topDisease)} (${(topDiseaseCount / diseased * 100).toStringAsFixed(1)}%)',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
@@ -982,7 +944,7 @@ class _TrackingPageState extends State<TrackingPage> {
             ),
           ),
           Text(
-            '$count (${percentage.toStringAsFixed(1)}%)',
+            '${percentage.toStringAsFixed(1)}%',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,

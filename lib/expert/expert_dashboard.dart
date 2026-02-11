@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'scan_request_list.dart';
 import 'scan_request_detail.dart';
-import 'disease_editor.dart';
 import 'expert_profile.dart';
 // import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -41,7 +40,6 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
     _pages = <Widget>[
       ExpertHomePage(), // Home tab
       ScanRequestList(initialTabIndex: _requestsInitialTab), // Requests tab
-      DiseaseEditor(), // Diseases tab
       ExpertProfile(), // Profile tab
     ];
   }
@@ -144,8 +142,6 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
         case 1:
           return 'Requests';
         case 2:
-          return 'Diseases';
-        case 3:
           return 'Profile';
         default:
           return 'Expert Dashboard';
@@ -369,10 +365,6 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
                   ],
                 ),
                 label: 'Requests',
-              ),
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.local_hospital),
-                label: 'Diseases',
               ),
               const BottomNavigationBarItem(
                 icon: Icon(Icons.person),

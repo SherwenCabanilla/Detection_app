@@ -218,10 +218,11 @@ class _UserRequestListState extends State<UserRequestList> {
   Widget _buildRequestCard(Map<String, dynamic> request) {
     final diseaseSummary = (request['diseaseSummary'] as List?) ?? [];
 
-    // Check if report has diseases or healthy leaves
-    final hasDiseasesOrHealthy = diseaseSummary.any((d) {
-      final rawDiseaseName = (d['disease'] ?? d['name'] ?? d['label'] ?? '').toString();
-      final normalizedName = rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
+    // Find the dominant disease/status to display
+    String dominantDisease = 'Unknown';
+
+    if (diseaseSummary.isNotEmpty) {
+      // Define valid diseases
       const validDiseases = {
         'anthracnose',
         'bacterial blackspot',
@@ -231,93 +232,48 @@ class _UserRequestListState extends State<UserRequestList> {
         'powdery_mildew',
         'dieback',
       };
-      final isValidDisease = validDiseases.contains(normalizedName) ||
-          validDiseases.contains(rawDiseaseName.toLowerCase());
-      final isHealthy = normalizedName == 'healthy';
-      final isNonMangoLeaf = normalizedName == 'banana' ||
-          normalizedName == 'eggplant' ||
-          normalizedName == 'moringa';
-      final isTipBurn = normalizedName == 'tip burn' || normalizedName == 'tip_burn';
-      // Only count as valid if it's a real disease or healthy, NOT non-mango leaf or tip_burn
-      return (isValidDisease || isHealthy) && !isNonMangoLeaf && !isTipBurn;
-    });
 
-    // Find the dominant disease (highest count/percentage)
-    // If report has diseases or healthy, NEVER show non-mango leaf or tip_burn
-    String dominantDisease = 'Unknown';
-    if (diseaseSummary.isNotEmpty) {
-      // Filter diseases - if report has diseases/healthy, exclude non-mango leaf and tip_burn
-      final filteredDiseases = diseaseSummary.where((d) {
-        final rawDiseaseName = (d['disease'] ?? d['name'] ?? d['label'] ?? '').toString();
-        final normalizedName = rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
-        final isNonMangoLeaf = normalizedName == 'banana' ||
-            normalizedName == 'eggplant' ||
-            normalizedName == 'moringa';
-        final isTipBurn = normalizedName == 'tip burn' || normalizedName == 'tip_burn';
-        
-        // If report has diseases or healthy, exclude non-mango leaf and tip_burn
-        if (hasDiseasesOrHealthy && (isNonMangoLeaf || isTipBurn)) {
-          return false;
-        }
-        return true;
-      }).toList();
+      // First, try to find actual diseases
+      final diseaseItems =
+          diseaseSummary.where((d) {
+            final rawDiseaseName =
+                (d['disease'] ?? d['name'] ?? d['label'] ?? '').toString();
+            final normalizedName =
+                rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
+            return validDiseases.contains(normalizedName) ||
+                validDiseases.contains(rawDiseaseName.toLowerCase());
+          }).toList();
 
-      if (filteredDiseases.isNotEmpty) {
-        // Sort by count to find the dominant disease
-        final sortedDiseases = List<Map<String, dynamic>>.from(filteredDiseases);
-        sortedDiseases.sort((a, b) {
+      if (diseaseItems.isNotEmpty) {
+        // If diseases found, show the one with highest count
+        diseaseItems.sort((a, b) {
           final countA = a['count'] as int? ?? 0;
           final countB = b['count'] as int? ?? 0;
-          return countB.compareTo(countA); // Descending order
+          return countB.compareTo(countA);
         });
-
-        final dominantDiseaseData = sortedDiseases.first;
-        final rawDominantDisease =
-            (dominantDiseaseData['name'] ??
-                    dominantDiseaseData['disease'] ??
-                    dominantDiseaseData['label'] ??
+        dominantDisease =
+            (diseaseItems.first['name'] ??
+                    diseaseItems.first['disease'] ??
+                    diseaseItems.first['label'] ??
                     'Unknown')
                 .toString();
-        
-        // FINAL CHECK: If report has diseases/healthy, NEVER allow non-mango leaf or tip_burn
-        final normalizedDominant = rawDominantDisease.toLowerCase().replaceAll('_', ' ').trim();
-        final isNonMangoLeaf = normalizedDominant == 'banana' ||
-            normalizedDominant == 'eggplant' ||
-            normalizedDominant == 'moringa';
-        final isTipBurn = normalizedDominant == 'tip burn' || normalizedDominant == 'tip_burn';
-        
-        if (hasDiseasesOrHealthy && (isNonMangoLeaf || isTipBurn)) {
-          // This should never happen, but if it does, find the next valid disease
-          if (sortedDiseases.length > 1) {
-            dominantDisease = (sortedDiseases[1]['name'] ??
-                    sortedDiseases[1]['disease'] ??
-                    sortedDiseases[1]['label'] ??
-                    'Unknown')
-                .toString();
-          } else {
-            dominantDisease = 'Unknown';
-          }
-        } else {
-          dominantDisease = rawDominantDisease;
-        }
       } else {
-        // Only show non-mango leaf or tip_burn if NO diseases or healthy exist
-        if (!hasDiseasesOrHealthy) {
-          final sortedDiseases = List<Map<String, dynamic>>.from(diseaseSummary);
-          sortedDiseases.sort((a, b) {
-            final countA = a['count'] as int? ?? 0;
-            final countB = b['count'] as int? ?? 0;
-            return countB.compareTo(countA);
-          });
-          if (sortedDiseases.isNotEmpty) {
-            final dominantDiseaseData = sortedDiseases.first;
-            dominantDisease =
-                (dominantDiseaseData['name'] ??
-                        dominantDiseaseData['disease'] ??
-                        dominantDiseaseData['label'] ??
-                        'Unknown')
-                    .toString();
-          }
+        // No diseases found, check for healthy
+        final healthyItems =
+            diseaseSummary.where((d) {
+              final rawDiseaseName =
+                  (d['disease'] ?? d['name'] ?? d['label'] ?? '').toString();
+              final normalizedName =
+                  rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
+              return normalizedName == 'healthy';
+            }).toList();
+
+        if (healthyItems.isNotEmpty) {
+          // Show "Healthy" if healthy leaves detected
+          dominantDisease = 'Healthy';
+        } else {
+          // No diseases and no healthy - show Unknown
+          dominantDisease = 'Unknown';
         }
       }
     }

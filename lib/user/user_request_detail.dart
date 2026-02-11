@@ -109,58 +109,62 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
             final imagePath =
                 (img['path'] ?? img['imagePath'] ?? '').toString();
             final displayPath = imageUrl.isNotEmpty ? imageUrl : imagePath;
-            final detections =
-                (img['results'] as List?)
-                    ?.where(
-                      (d) =>
-                          d != null &&
-                          d['disease'] != null &&
-                          d['confidence'] != null,
-                    )
-                    .toList() ??
-                [];
 
             return Dialog(
               backgroundColor: Colors.black,
               insetPadding: const EdgeInsets.all(12),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final widgetW = constraints.maxWidth;
-                  final widgetH = constraints.maxHeight;
-
                   return Stack(
-                    fit: StackFit.expand,
                     children: [
-                      _buildImageWidget(displayPath, fit: BoxFit.contain),
-                      if (_showBoundingBoxes && detections.isNotEmpty)
-                        Builder(
-                          builder: (context) {
-                            final storedImageWidth = img['imageWidth'] as num?;
-                            final storedImageHeight =
-                                img['imageHeight'] as num?;
+                      // InteractiveViewer for pinch-to-zoom (bounding boxes disabled in fullscreen)
+                      Positioned.fill(
+                        child: InteractiveViewer(
+                          key: ValueKey(currentIndex), // Force rebuild on image change
+                          minScale: 0.5,
+                          maxScale: 5.0,
+                          panEnabled: true,
+                          scaleEnabled: true,
+                          boundaryMargin: const EdgeInsets.all(double.infinity),
+                          child: Center(
+                            child: _buildImageWidget(
+                              displayPath,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Don't show bounding boxes in fullscreen viewer to allow smooth zooming
+                      /*if (_showBoundingBoxes && detections.isNotEmpty)
+                        IgnorePointer(
+                          child: Builder(
+                            builder: (context) {
+                              final storedImageWidth = img['imageWidth'] as num?;
+                              final storedImageHeight =
+                                  img['imageHeight'] as num?;
 
-                            if (storedImageWidth != null &&
-                                storedImageHeight != null) {
-                              final imgSize = Size(
-                                storedImageWidth.toDouble(),
-                                storedImageHeight.toDouble(),
-                              );
-                              final imgW = imgSize.width;
-                              final imgH = imgSize.height;
-                              final widgetAspect = widgetW / widgetH;
-                              final imageAspect = imgW / imgH;
-                              double displayW, displayH, dx = 0, dy = 0;
-                              if (widgetAspect > imageAspect) {
-                                displayH = widgetH;
-                                displayW = widgetH * imageAspect;
-                                dx = (widgetW - displayW) / 2;
-                              } else {
-                                displayW = widgetW;
-                                displayH = widgetW / imageAspect;
-                                dy = (widgetH - displayH) / 2;
-                              }
+                              if (storedImageWidth != null &&
+                                  storedImageHeight != null) {
+                                final imgSize = Size(
+                                  storedImageWidth.toDouble(),
+                                  storedImageHeight.toDouble(),
+                                );
+                                final imgW = imgSize.width;
+                                final imgH = imgSize.height;
+                                final widgetAspect = widgetW / widgetH;
+                                final imageAspect = imgW / imgH;
+                                double displayW, displayH, dx = 0, dy = 0;
+                                if (widgetAspect > imageAspect) {
+                                  displayH = widgetH;
+                                  displayW = widgetH * imageAspect;
+                                  dx = (widgetW - displayW) / 2;
+                                } else {
+                                  displayW = widgetW;
+                                  displayH = widgetW / imageAspect;
+                                  dy = (widgetH - displayH) / 2;
+                                }
 
-                              return CustomPaint(
+                                return CustomPaint(
                                 painter: DetectionPainter(
                                   results:
                                       detections
@@ -270,15 +274,16 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
                                         displayW,
                                         displayH,
                                       ),
-                                      displayedImageOffset: Offset(dx, dy),
-                                    ),
-                                    size: Size(widgetW, widgetH),
-                                  );
-                                },
-                              );
-                            }
-                          },
-                        ),
+                                    displayedImageOffset: Offset(dx, dy),
+                                  ),
+                                  size: Size(widgetW, widgetH),
+                                );
+                              },
+                            );
+                          }
+                        },
+                          ),
+                        ),*/
                       Positioned(
                         top: 8,
                         right: 8,
@@ -287,46 +292,50 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
                           onPressed: () => Navigator.pop(context),
                         ),
                       ),
-                      Positioned(
-                        left: 0,
-                        top: 0,
-                        bottom: 0,
-                        child: Center(
-                          child: IconButton(
-                            iconSize: 36,
-                            color: Colors.white,
-                            icon: const Icon(Icons.chevron_left),
-                            onPressed:
-                                currentIndex > 0
-                                    ? () {
-                                      setStateDialog(() {
-                                        currentIndex -= 1;
-                                      });
-                                    }
-                                    : null,
+                      if (images.length > 1)
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: 60,
+                          child: Center(
+                            child: IconButton(
+                              iconSize: 36,
+                              color: Colors.white,
+                              icon: const Icon(Icons.chevron_left),
+                              onPressed:
+                                  currentIndex > 0
+                                      ? () {
+                                        setStateDialog(() {
+                                          currentIndex -= 1;
+                                        });
+                                      }
+                                      : null,
+                            ),
                           ),
                         ),
-                      ),
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        bottom: 0,
-                        child: Center(
-                          child: IconButton(
-                            iconSize: 36,
-                            color: Colors.white,
-                            icon: const Icon(Icons.chevron_right),
-                            onPressed:
-                                currentIndex < images.length - 1
-                                    ? () {
-                                      setStateDialog(() {
-                                        currentIndex += 1;
-                                      });
-                                    }
-                                    : null,
+                      if (images.length > 1)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: 60,
+                          child: Center(
+                            child: IconButton(
+                              iconSize: 36,
+                              color: Colors.white,
+                              icon: const Icon(Icons.chevron_right),
+                              onPressed:
+                                  currentIndex < images.length - 1
+                                      ? () {
+                                        setStateDialog(() {
+                                          currentIndex += 1;
+                                        });
+                                      }
+                                      : null,
+                            ),
                           ),
                         ),
-                      ),
                       Positioned(
                         bottom: 8,
                         left: 0,
@@ -781,7 +790,7 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    'health_status: ${expertReview['healthStatus'] == 'healthy' ? 'Healthy' : 'Not Healthy'}',
+                                    '${tr('health_status')}: ${expertReview['healthStatus'] == 'healthy' ? tr('healthy') : tr('not_healthy')}',
                                     style: TextStyle(
                                       fontSize: 14,
                                       color:
@@ -2075,8 +2084,8 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
                       ? imagePath
                       : _getDiseaseImagePath(diseaseKey),
               scientificName: info?['scientificName'] ?? '',
+              confirmedBy: info?['confirmedBy'] ?? 'Office of Carmen',
               details: {
-                'Symptoms': (info?['symptoms'] as List?)?.cast<String>() ?? [],
                 'Treatments':
                     (info?['treatments'] as List?)?.cast<String>() ?? [],
               },
@@ -2138,6 +2147,7 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
             'scientificName': data['scientificName'] ?? '',
             'symptoms': List<String>.from(data['symptoms'] ?? []),
             'treatments': List<String>.from(data['treatments'] ?? []),
+            'confirmedBy': data['confirmedBy'] ?? 'Office of Carmen',
           };
         }
       }

@@ -278,5 +278,11 @@
   "diseases_decreasing": "Mga Sakit na Bumababa",
   "disease_trend_rec_single": "Ang {disease} ay kumakalat. Tumuon sa paggamot ng sakit na ito kaagad.",
   "disease_trend_rec_multiple": "Maraming sakit ang kumakalat. Unahin ang paggamot at isaalang-alang ang pagsusuri ng eksperto.",
-  "disease_trend_rec_decreasing": "Magandang balita! Ang iyong mga pagsisikap sa paggamot ay gumagana. Ipagpatuloy ang kasalukuyang mga gawain."
+  "disease_trend_rec_decreasing": "Magandang balita! Ang iyong mga pagsisikap sa paggamot ay gumagana. Ipagpatuloy ang kasalukuyang mga gawain.",
+  "most_common_disease": "Pinaka-Karaniwang Sakit",
+  "disease_distribution": "Pamamahagi ng Sakit",
+  "diseased": "May Sakit",
+  "total": "Kabuuan",
+  "health_status": "Katayuan ng Kalusugan",
+  "not_healthy": "Hindi Malusog"
 }

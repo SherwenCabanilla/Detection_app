@@ -277,5 +277,11 @@
   "diseases_decreasing": "Mga Sakit nga Mikunhod",
   "disease_trend_rec_single": "Ang {disease} mikaylap. Tutukan ang pagtambal niini nga sakit dayon.",
   "disease_trend_rec_multiple": "Daghang sakit ang mikaylap. Una ang pagtambal ug ikonsiderar ang pagsusi sa eksperto.",
-  "disease_trend_rec_decreasing": "Maayong balita! Ang imong mga paningkamot sa pagtambal molihok. Ipadayon ang kasamtangan nga mga buluhaton."
+  "disease_trend_rec_decreasing": "Maayong balita! Ang imong mga paningkamot sa pagtambal molihok. Ipadayon ang kasamtangan nga mga buluhaton.",
+  "most_common_disease": "Pinaka-Kasagaran nga Sakit",
+  "disease_distribution": "Pag-apod-apod sa Sakit",
+  "diseased": "Adunay Sakit",
+  "total": "Kinatibuk-an",
+  "health_status": "Kahimtang sa Kahimsog",
+  "not_healthy": "Dili Himsog"
 }

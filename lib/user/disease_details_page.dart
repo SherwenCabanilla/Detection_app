@@ -4,6 +4,7 @@ class DiseaseDetailsPage extends StatelessWidget {
   final String name;
   final String imagePath;
   final String scientificName;
+  final String confirmedBy;
   final Map<String, List<String>> details;
 
   const DiseaseDetailsPage({
@@ -11,6 +12,7 @@ class DiseaseDetailsPage extends StatelessWidget {
     required this.name,
     required this.imagePath,
     required this.scientificName,
+    required this.confirmedBy,
     required this.details,
   }) : super(key: key);
 
@@ -84,6 +86,26 @@ class DiseaseDetailsPage extends StatelessWidget {
                       fontStyle: FontStyle.italic,
                     ),
                   ),
+                const SizedBox(height: 8),
+                // Confirmation source
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.verified,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Confirmed by $confirmedBy',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),

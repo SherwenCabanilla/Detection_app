@@ -433,11 +433,10 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                               final widgetH = constraints.maxHeight;
 
                               // Calculate scale and offset for BoxFit.cover
-                              final scale =
-                                  imgW / imgH > widgetW / widgetH
-                                      ? widgetH /
-                                          imgH // Height constrained
-                                      : widgetW / imgW; // Width constrained
+                              // For cover, we need the LARGER scale to fill the container
+                              final scaleX = widgetW / imgW;
+                              final scaleY = widgetH / imgH;
+                              final scale = scaleX > scaleY ? scaleX : scaleY;
 
                               final scaledW = imgW * scale;
                               final scaledH = imgH * scale;
@@ -501,11 +500,11 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                                   final widgetH = constraints.maxHeight;
 
                                   // Calculate scale and offset for BoxFit.cover
+                                  // For cover, we need the LARGER scale to fill the container
+                                  final scaleX = widgetW / imgW;
+                                  final scaleY = widgetH / imgH;
                                   final scale =
-                                      imgW / imgH > widgetW / widgetH
-                                          ? widgetH /
-                                              imgH // Height constrained
-                                          : widgetW / imgW; // Width constrained
+                                      scaleX > scaleY ? scaleX : scaleY;
 
                                   final scaledW = imgW * scale;
                                   final scaledH = imgH * scale;
@@ -593,6 +592,8 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
             final image = images[currentIndex];
             final imageUrl = image['imageUrl'];
             final imagePath = image['path'];
+
+            // Get detections for this image
             final detections =
                 (image['results'] as List<dynamic>?)
                     ?.where(
@@ -610,122 +611,138 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   return Stack(
-                    fit: StackFit.expand,
                     children: [
-                      // Image
-                      _buildImageWidget(
-                        imageUrl ?? imagePath,
-                        fit: BoxFit.contain,
+                      // InteractiveViewer for pinch-to-zoom
+                      Positioned.fill(
+                        child: InteractiveViewer(
+                          key: ValueKey(
+                            currentIndex,
+                          ), // Force rebuild on image change
+                          minScale: 0.5,
+                          maxScale: 5.0,
+                          panEnabled: true,
+                          scaleEnabled: true,
+                          boundaryMargin: const EdgeInsets.all(double.infinity),
+                          child: Center(
+                            child: _buildImageWidget(
+                              imageUrl ?? imagePath,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
                       ),
-                      // Bounding boxes overlay
+                      // Bounding boxes overlay (with IgnorePointer for zoom interaction)
                       if (_showBoundingBoxes && detections.isNotEmpty)
-                        Builder(
-                          builder: (context) {
-                            final storedImageWidth =
-                                image['imageWidth'] as num?;
-                            final storedImageHeight =
-                                image['imageHeight'] as num?;
+                        IgnorePointer(
+                          child: Builder(
+                            builder: (context) {
+                              final storedImageWidth =
+                                  image['imageWidth'] as num?;
+                              final storedImageHeight =
+                                  image['imageHeight'] as num?;
 
-                            final widgetW = constraints.maxWidth;
-                            final widgetH = constraints.maxHeight;
+                              final widgetW = constraints.maxWidth;
+                              final widgetH = constraints.maxHeight;
 
-                            if (storedImageWidth != null &&
-                                storedImageHeight != null) {
-                              final originalSize = Size(
-                                storedImageWidth.toDouble(),
-                                storedImageHeight.toDouble(),
-                              );
-                              // BoxFit.contain scale
-                              final scale = math.min(
-                                widgetW / originalSize.width,
-                                widgetH / originalSize.height,
-                              );
-                              final scaledW = originalSize.width * scale;
-                              final scaledH = originalSize.height * scale;
-                              final dx = (widgetW - scaledW) / 2;
-                              final dy = (widgetH - scaledH) / 2;
+                              if (storedImageWidth != null &&
+                                  storedImageHeight != null) {
+                                final originalSize = Size(
+                                  storedImageWidth.toDouble(),
+                                  storedImageHeight.toDouble(),
+                                );
+                                // BoxFit.contain scale
+                                final scale = math.min(
+                                  widgetW / originalSize.width,
+                                  widgetH / originalSize.height,
+                                );
+                                final scaledW = originalSize.width * scale;
+                                final scaledH = originalSize.height * scale;
+                                final dx = (widgetW - scaledW) / 2;
+                                final dy = (widgetH - scaledH) / 2;
 
-                              return CustomPaint(
-                                painter: DetectionPainter(
-                                  results:
-                                      detections
-                                          .where(
-                                            (d) => d['boundingBox'] != null,
-                                          )
-                                          .map(
-                                            (d) => DetectionResult(
-                                              label: d['disease'],
-                                              confidence: d['confidence'],
-                                              boundingBox: Rect.fromLTRB(
-                                                d['boundingBox']['left'],
-                                                d['boundingBox']['top'],
-                                                d['boundingBox']['right'],
-                                                d['boundingBox']['bottom'],
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                  originalImageSize: originalSize,
-                                  displayedImageSize: Size(scaledW, scaledH),
-                                  displayedImageOffset: Offset(dx, dy),
-                                ),
-                                size: Size(widgetW, widgetH),
-                              );
-                            } else {
-                              return FutureBuilder<Size>(
-                                future: _getImageSize(
-                                  imageUrl != null && imageUrl.isNotEmpty
-                                      ? NetworkImage(imageUrl)
-                                      : FileImage(File(imagePath)),
-                                ),
-                                builder: (context, snapshot) {
-                                  if (!snapshot.hasData) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  final originalSize = snapshot.data!;
-                                  // BoxFit.contain scale
-                                  final scale = math.min(
-                                    widgetW / originalSize.width,
-                                    widgetH / originalSize.height,
-                                  );
-                                  final scaledW = originalSize.width * scale;
-                                  final scaledH = originalSize.height * scale;
-                                  final dx = (widgetW - scaledW) / 2;
-                                  final dy = (widgetH - scaledH) / 2;
-
-                                  return CustomPaint(
-                                    painter: DetectionPainter(
-                                      results:
-                                          detections
-                                              .where(
-                                                (d) => d['boundingBox'] != null,
-                                              )
-                                              .map(
-                                                (d) => DetectionResult(
-                                                  label: d['disease'],
-                                                  confidence: d['confidence'],
-                                                  boundingBox: Rect.fromLTRB(
-                                                    d['boundingBox']['left'],
-                                                    d['boundingBox']['top'],
-                                                    d['boundingBox']['right'],
-                                                    d['boundingBox']['bottom'],
-                                                  ),
+                                return CustomPaint(
+                                  painter: DetectionPainter(
+                                    results:
+                                        detections
+                                            .where(
+                                              (d) => d['boundingBox'] != null,
+                                            )
+                                            .map(
+                                              (d) => DetectionResult(
+                                                label: d['disease'],
+                                                confidence: d['confidence'],
+                                                boundingBox: Rect.fromLTRB(
+                                                  d['boundingBox']['left'],
+                                                  d['boundingBox']['top'],
+                                                  d['boundingBox']['right'],
+                                                  d['boundingBox']['bottom'],
                                                 ),
-                                              )
-                                              .toList(),
-                                      originalImageSize: originalSize,
-                                      displayedImageSize: Size(
-                                        scaledW,
-                                        scaledH,
+                                              ),
+                                            )
+                                            .toList(),
+                                    originalImageSize: originalSize,
+                                    displayedImageSize: Size(scaledW, scaledH),
+                                    displayedImageOffset: Offset(dx, dy),
+                                  ),
+                                  size: Size(widgetW, widgetH),
+                                );
+                              } else {
+                                return FutureBuilder<Size>(
+                                  future: _getImageSize(
+                                    imageUrl != null && imageUrl.isNotEmpty
+                                        ? NetworkImage(imageUrl)
+                                        : FileImage(File(imagePath)),
+                                  ),
+                                  builder: (context, snapshot) {
+                                    if (!snapshot.hasData) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    final originalSize = snapshot.data!;
+                                    // BoxFit.contain scale
+                                    final scale = math.min(
+                                      widgetW / originalSize.width,
+                                      widgetH / originalSize.height,
+                                    );
+                                    final scaledW = originalSize.width * scale;
+                                    final scaledH = originalSize.height * scale;
+                                    final dx = (widgetW - scaledW) / 2;
+                                    final dy = (widgetH - scaledH) / 2;
+
+                                    return CustomPaint(
+                                      painter: DetectionPainter(
+                                        results:
+                                            detections
+                                                .where(
+                                                  (d) =>
+                                                      d['boundingBox'] != null,
+                                                )
+                                                .map(
+                                                  (d) => DetectionResult(
+                                                    label: d['disease'],
+                                                    confidence: d['confidence'],
+                                                    boundingBox: Rect.fromLTRB(
+                                                      d['boundingBox']['left'],
+                                                      d['boundingBox']['top'],
+                                                      d['boundingBox']['right'],
+                                                      d['boundingBox']['bottom'],
+                                                    ),
+                                                  ),
+                                                )
+                                                .toList(),
+                                        originalImageSize: originalSize,
+                                        displayedImageSize: Size(
+                                          scaledW,
+                                          scaledH,
+                                        ),
+                                        displayedImageOffset: Offset(dx, dy),
                                       ),
-                                      displayedImageOffset: Offset(dx, dy),
-                                    ),
-                                    size: Size(widgetW, widgetH),
-                                  );
-                                },
-                              );
-                            }
-                          },
+                                      size: Size(widgetW, widgetH),
+                                    );
+                                  },
+                                );
+                              }
+                            },
+                          ),
                         ),
                       // Close button
                       Positioned(
@@ -737,47 +754,51 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                         ),
                       ),
                       // Previous button
-                      Positioned(
-                        left: 0,
-                        top: 0,
-                        bottom: 0,
-                        child: Center(
-                          child: IconButton(
-                            iconSize: 36,
-                            color: Colors.white,
-                            icon: const Icon(Icons.chevron_left),
-                            onPressed:
-                                currentIndex > 0
-                                    ? () {
-                                      setStateDialog(() {
-                                        currentIndex -= 1;
-                                      });
-                                    }
-                                    : null,
+                      if (images.length > 1)
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: 60,
+                          child: Center(
+                            child: IconButton(
+                              iconSize: 36,
+                              color: Colors.white,
+                              icon: const Icon(Icons.chevron_left),
+                              onPressed:
+                                  currentIndex > 0
+                                      ? () {
+                                        setStateDialog(() {
+                                          currentIndex -= 1;
+                                        });
+                                      }
+                                      : null,
+                            ),
                           ),
                         ),
-                      ),
                       // Next button
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        bottom: 0,
-                        child: Center(
-                          child: IconButton(
-                            iconSize: 36,
-                            color: Colors.white,
-                            icon: const Icon(Icons.chevron_right),
-                            onPressed:
-                                currentIndex < images.length - 1
-                                    ? () {
-                                      setStateDialog(() {
-                                        currentIndex += 1;
-                                      });
-                                    }
-                                    : null,
+                      if (images.length > 1)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: 60,
+                          child: Center(
+                            child: IconButton(
+                              iconSize: 36,
+                              color: Colors.white,
+                              icon: const Icon(Icons.chevron_right),
+                              onPressed:
+                                  currentIndex < images.length - 1
+                                      ? () {
+                                        setStateDialog(() {
+                                          currentIndex += 1;
+                                        });
+                                      }
+                                      : null,
+                            ),
                           ),
                         ),
-                      ),
                       // Index indicator
                       Positioned(
                         bottom: 8,
@@ -886,244 +907,189 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
   Widget _buildDiseaseSummary() {
     final rawSummary = widget.request['diseaseSummary'] as List<dynamic>? ?? [];
     final diseaseSummary = _mergeDiseaseSummary(rawSummary);
-    
+
     // Check if there's healthy
     final hasHealthy = diseaseSummary.any((d) {
-      final diseaseName = (d['disease'] ?? d['name'] ?? '').toString().toLowerCase();
+      final diseaseName =
+          (d['disease'] ?? d['name'] ?? '').toString().toLowerCase();
       return diseaseName == 'healthy';
     });
-    
+
     // Filter out healthy, tip_burn, unknown, and non-mango leaf classes
-    final filteredSummary = diseaseSummary.where((d) {
-      final rawDiseaseName = (d['disease'] ?? d['name'] ?? '').toString();
-      final normalizedName = rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
-      
-      // Valid mango leaf diseases only
-      const validDiseases = {
-        'anthracnose',
-        'bacterial blackspot',
-        'bacterial_blackspot',
-        'backterial_blackspot',
-        'powdery mildew',
-        'powdery_mildew',
-        'dieback',
-      };
-      
-      // Check if it's a valid disease
-      final isValidDisease = validDiseases.contains(normalizedName) ||
-                            validDiseases.contains(rawDiseaseName.toLowerCase());
-      
-      // Exclude non-mango leaf, tip_burn, unknown, and healthy
-      final isNonMangoLeaf = normalizedName == 'banana' ||
-                            normalizedName == 'eggplant' ||
-                            normalizedName == 'moringa';
-      final isTipBurn = normalizedName == 'tip burn' ||
-                       normalizedName == 'tip_burn';
-      final isUnknown = normalizedName == 'unknown';
-      final isHealthy = normalizedName == 'healthy';
-      
-      return isValidDisease && !isNonMangoLeaf && !isTipBurn && !isUnknown && !isHealthy;
-    }).toList();
-    
+    final filteredSummary =
+        diseaseSummary.where((d) {
+          final rawDiseaseName = (d['disease'] ?? d['name'] ?? '').toString();
+          final normalizedName =
+              rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
+
+          const validDiseases = {
+            'anthracnose',
+            'bacterial blackspot',
+            'bacterial_blackspot',
+            'backterial_blackspot',
+            'powdery mildew',
+            'powdery_mildew',
+            'dieback',
+          };
+
+          final isValidDisease =
+              validDiseases.contains(normalizedName) ||
+              validDiseases.contains(rawDiseaseName.toLowerCase());
+          final isNonMangoLeaf =
+              normalizedName == 'banana' ||
+              normalizedName == 'eggplant' ||
+              normalizedName == 'moringa';
+          final isTipBurn =
+              normalizedName == 'tip burn' || normalizedName == 'tip_burn';
+          final isUnknown = normalizedName == 'unknown';
+          final isHealthy = normalizedName == 'healthy';
+
+          return isValidDisease &&
+              !isNonMangoLeaf &&
+              !isTipBurn &&
+              !isUnknown &&
+              !isHealthy;
+        }).toList();
+
     // Sort by count
     final sortedDiseases = [...filteredSummary]..sort((a, b) {
       final countA = a['count'] as int? ?? 0;
       final countB = b['count'] as int? ?? 0;
       return countB.compareTo(countA);
     });
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Healthy Leaves Section (if any)
-        if (hasHealthy) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
-            child: Text(
-              'Healthy Leaves',
+        // Header with stats
+        Row(
+          children: [
+            Text(
+              'Disease Summary',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: Colors.grey[800],
               ),
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
-            child: _buildHealthySection(),
-          ),
-          const SizedBox(height: 16),
-        ],
-        // Disease Summary
-        Text(
-          'Disease Summary',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey[800],
-          ),
-        ),
-        const SizedBox(height: 16),
-        if (sortedDiseases.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[200]!),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.check_circle_outline, color: Colors.grey[600], size: 24),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'No diseases detected',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[700],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
-            child: Column(
-              children: sortedDiseases.asMap().entries.map((entry) {
-                final index = entry.key;
-                final disease = entry.value;
-                final rawDiseaseName = (disease['disease'] ?? disease['name'] ?? 'Unknown').toString();
-                final color = _getDiseaseColor(rawDiseaseName);
-                final isLast = index == sortedDiseases.length - 1;
-
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
-                  ),
-                  decoration: BoxDecoration(
-                    border: isLast
-                        ? null
-                        : Border(
-                            bottom: BorderSide(
-                              color: Colors.grey[100]!,
-                              width: 1,
-                            ),
-                          ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          Icons.warning_rounded,
-                          color: color,
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Text(
-                          _formatExpertLabel(rawDiseaseName),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF1A1A1A),
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        const SizedBox(height: 16),
-        // Summary statistics
-        Row(
-          children: [
-            Expanded(
-              child: _buildStatCard(
-                'Diseases Found',
-                '${sortedDiseases.length}',
-                Icons.warning,
-                Colors.orange,
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildStatCard(
-                'Images Analyzed',
-                '${widget.request['images']?.length ?? 0}',
-                Icons.image,
-                Colors.purple,
+              child: Text(
+                '${sortedDiseases.length} ${sortedDiseases.length == 1 ? 'Disease' : 'Diseases'}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.orange,
+                ),
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        // Compact disease list
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[200]!),
+          ),
+          child: Column(
+            children: [
+              // Healthy (if any)
+              if (hasHealthy)
+                _buildCompactDiseaseRow(
+                  'Healthy',
+                  DetectionPainter.diseaseColors['healthy'] ?? Colors.blue,
+                  Icons.check_circle_outline,
+                  isLast: sortedDiseases.isEmpty,
+                ),
+              // Diseases
+              if (sortedDiseases.isEmpty && !hasHealthy)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        color: Colors.grey[400],
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'No diseases detected',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ...sortedDiseases.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final disease = entry.value;
+                  final rawDiseaseName =
+                      (disease['disease'] ?? disease['name'] ?? 'Unknown')
+                          .toString();
+                  final color = _getDiseaseColor(rawDiseaseName);
+                  final isLast = index == sortedDiseases.length - 1;
+
+                  return _buildCompactDiseaseRow(
+                    _formatExpertLabel(rawDiseaseName),
+                    color,
+                    Icons.warning_rounded,
+                    isLast: isLast,
+                  );
+                }).toList(),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildHealthySection() {
-    final healthyColor = DetectionPainter.diseaseColors['healthy'] ?? Colors.blue;
-    
+  Widget _buildCompactDiseaseRow(
+    String name,
+    Color color,
+    IconData icon, {
+    bool isLast = false,
+  }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+        border:
+            isLast
+                ? null
+                : Border(
+                  bottom: BorderSide(color: Colors.grey[100]!, width: 1),
+                ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              name,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
           ),
         ],
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: healthyColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                Icons.check_circle_outline,
-                color: healthyColor,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                'Healthy',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF1A1A1A),
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1855,38 +1821,6 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
       default:
         return Colors.grey;
     }
-  }
-
-  Widget _buildStatCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            Text(
-              title,
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Future<Size> _getImageSize(ImageProvider provider) async {

@@ -412,6 +412,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
             'scientificName': data['scientificName'] ?? '',
             'symptoms': List<String>.from(data['symptoms'] ?? []),
             'treatments': List<String>.from(data['treatments'] ?? []),
+            'confirmedBy': data['confirmedBy'] ?? 'Office of Carmen',
           };
         }
       }
@@ -891,8 +892,8 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
           name: name,
           imagePath: imagePath.isEmpty ? 'assets/replace_disease/healthy_image.jpg' : imagePath,
           scientificName: info?['scientificName'] ?? '',
+          confirmedBy: info?['confirmedBy'] ?? 'Office of Carmen',
           details: {
-            'Symptoms': (info?['symptoms'] as List?)?.cast<String>() ?? [],
             'Treatments': (info?['treatments'] as List?)?.cast<String>() ?? [],
           },
         ),
@@ -1051,47 +1052,30 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _formatLabel(disease),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF1A1A1A),
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                        if (!isHealthy && !isUnknown) ...[
-                          const SizedBox(height: 4),
-                          _buildSeverityBadge(disease, diseaseCounts),
-                        ],
-                      ],
+                    child: Text(
+                      _formatLabel(disease),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1A1A1A),
+                        letterSpacing: -0.3,
+                      ),
                     ),
                   ),
                   if (!isHealthy && !isUnknown)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: ElevatedButton(
-                        onPressed: () {
-                          _showDiseaseDetails(_formatLabel(disease), _getDiseaseImagePath(disease), disease);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: const Text(
-                          'Recommendation',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
+                    TextButton(
+                      onPressed: () {
+                        _showDiseaseDetails(_formatLabel(disease), _getDiseaseImagePath(disease), disease);
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.green,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      ),
+                      child: const Text(
+                        'Recommendation',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     )
@@ -1110,70 +1094,6 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     );
   }
 
-  // Calculate severity for the 4 main diseases only
-  String _getSeverityLevel(String disease, Map<String, int> diseaseCounts) {
-    // Only calculate for the 4 main diseases
-    const mainDiseases = ['anthracnose', 'backterial_blackspot', 'powdery_mildew', 'dieback'];
-    if (!mainDiseases.contains(disease.toLowerCase())) {
-      return '';
-    }
-
-    // Calculate total of only the 4 diseases (excluding healthy/unknown)
-    int totalDiseaseDetections = 0;
-    for (final d in mainDiseases) {
-      totalDiseaseDetections += diseaseCounts[d.toLowerCase()] ?? 0;
-    }
-
-    if (totalDiseaseDetections == 0) return '';
-
-    final diseaseCount = diseaseCounts[disease] ?? 0;
-    final percentage = (diseaseCount / totalDiseaseDetections * 100);
-
-    if (percentage >= 80) {
-      return 'High';
-    } else if (percentage >= 60) {
-      return 'Medium';
-    } else {
-      return 'Low';
-    }
-  }
-
-  Widget _buildSeverityBadge(String disease, Map<String, int> diseaseCounts) {
-    final severity = _getSeverityLevel(disease, diseaseCounts);
-    if (severity.isEmpty) return const SizedBox.shrink();
-
-    Color severityColor;
-    switch (severity) {
-      case 'High':
-        severityColor = Colors.red;
-        break;
-      case 'Medium':
-        severityColor = Colors.orange;
-        break;
-      case 'Low':
-        severityColor = Colors.green;
-        break;
-      default:
-        severityColor = Colors.grey;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: severityColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: severityColor.withOpacity(0.3), width: 1),
-      ),
-      child: Text(
-        severity,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: severityColor,
-        ),
-      ),
-    );
-  }
 
   // Special cases for diseases not in Firestore (only for healthy, tip_burn, and unknown)
   static const Map<String, Map<String, dynamic>> specialDiseaseInfo = {

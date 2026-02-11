@@ -439,6 +439,7 @@ class _HomePageState extends State<HomePage> {
             'scientificName': data['scientificName'] ?? '',
             'symptoms': List<String>.from(data['symptoms'] ?? []),
             'treatments': List<String>.from(data['treatments'] ?? []),
+            'confirmedBy': data['confirmedBy'] ?? 'Office of Carmen',
           };
         }
       }
@@ -763,8 +764,8 @@ class _HomePageState extends State<HomePage> {
               name: name,
               imagePath: imagePath,
               scientificName: _diseaseInfo[name]?['scientificName'] ?? '',
+              confirmedBy: _diseaseInfo[name]?['confirmedBy'] ?? 'Office of Carmen',
               details: {
-                'Symptoms': _diseaseInfo[name]?['symptoms'] ?? [],
                 'Treatments': _diseaseInfo[name]?['treatments'] ?? [],
               },
             ),
@@ -1256,20 +1257,57 @@ class _HomePageState extends State<HomePage> {
         statusText = tr('pending');
     }
 
-    // Get primary disease name and normalize Tip Burn to Unknown
+    // Get primary disease name using same logic as My Requests
     String diseaseName = 'Analyzing...';
-    Map<String, dynamic>? topDisease;
+    
     if (diseaseSummary.isNotEmpty) {
-      // Choose the dominant disease by highest count (matches My Requests logic)
-      final List<Map<String, dynamic>> list =
-          diseaseSummary.whereType<Map<String, dynamic>>().toList();
-      if (list.isNotEmpty) {
-        list.sort((a, b) {
-          final num countA = (a['count'] is num) ? a['count'] as num : 0;
-          final num countB = (b['count'] is num) ? b['count'] as num : 0;
+      // Define valid diseases
+      const validDiseases = {
+        'anthracnose',
+        'bacterial blackspot',
+        'bacterial_blackspot',
+        'backterial_blackspot',
+        'powdery mildew',
+        'powdery_mildew',
+        'dieback',
+      };
+      
+      // First, try to find actual diseases
+      final diseaseItems = diseaseSummary.where((d) {
+        final rawDiseaseName = (d['disease'] ?? d['name'] ?? d['label'] ?? '').toString();
+        final normalizedName = rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
+        return validDiseases.contains(normalizedName) || 
+               validDiseases.contains(rawDiseaseName.toLowerCase());
+      }).toList();
+      
+      if (diseaseItems.isNotEmpty) {
+        // If diseases found, show the one with highest count
+        diseaseItems.sort((a, b) {
+          final countA = (a['count'] is num) ? a['count'] as num : 0;
+          final countB = (b['count'] is num) ? b['count'] as num : 0;
           return countB.compareTo(countA);
         });
-        topDisease = list.first;
+        final rawName = (diseaseItems.first['name'] ??
+                diseaseItems.first['disease'] ??
+                diseaseItems.first['label'] ??
+                'Unknown')
+            .toString();
+        diseaseName = _formatExpertLabel(rawName);
+      } else {
+        // No diseases found, check for healthy
+        final healthyItems = diseaseSummary.where((d) {
+          final rawDiseaseName = (d['disease'] ?? d['name'] ?? d['label'] ?? '').toString();
+          final normalizedName = rawDiseaseName.toLowerCase().replaceAll('_', ' ').trim();
+          return normalizedName == 'healthy';
+        }).toList();
+        
+        if (healthyItems.isNotEmpty) {
+          // Show "Healthy" if healthy leaves detected
+          diseaseName = 'Healthy';
+        } else {
+          // No diseases and no healthy - show Unknown
+          diseaseName = 'Unknown';
+        }
       }
     } else {
       // Fallback: compute dominant disease from images[].results if present
@@ -1286,37 +1324,37 @@ class _HomePageState extends State<HomePage> {
           }
         }
         if (counts.isNotEmpty) {
-          final sorted =
-              counts.entries.toList()
-                ..sort((a, b) => b.value.compareTo(a.value));
-          final best = sorted.first;
-          topDisease = {
-            'name': best.key,
-            'label': best.key,
-            'count': best.value,
+          // Apply same filtering logic
+          const validDiseases = {
+            'anthracnose',
+            'bacterial blackspot',
+            'bacterial_blackspot',
+            'backterial_blackspot',
+            'powdery mildew',
+            'powdery_mildew',
+            'dieback',
           };
+          
+          final sorted = counts.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value));
+          
+          // Find first valid disease
+          for (final entry in sorted) {
+            final normalizedName = entry.key.toLowerCase().replaceAll('_', ' ').trim();
+            if (validDiseases.contains(normalizedName) || 
+                validDiseases.contains(entry.key.toLowerCase())) {
+              diseaseName = _formatExpertLabel(entry.key);
+              break;
+            } else if (normalizedName == 'healthy') {
+              diseaseName = 'Healthy';
+              break;
+            }
+          }
+          // If no valid disease or healthy found, show Unknown
+          if (diseaseName == 'Analyzing...') {
+            diseaseName = 'Unknown';
+          }
         }
-      }
-    }
-    if (topDisease != null) {
-      final rawName = (topDisease['name'] ?? '').toString();
-      final lower = rawName.toLowerCase();
-      if (lower == 'tip_burn' || lower == 'tip burn') {
-        diseaseName = 'Unknown';
-      } else if (lower == 'backterial_blackspot') {
-        diseaseName = 'Bacterial black spot';
-      } else if (lower == 'powdery_mildew') {
-        diseaseName = 'Powdery Mildew';
-      } else if (rawName.isEmpty) {
-        diseaseName = 'Unknown';
-      } else {
-        diseaseName = rawName
-            .split('_')
-            .map(
-              (word) =>
-                  word.isEmpty ? '' : word[0].toUpperCase() + word.substring(1),
-            )
-            .join(' ');
       }
     }
 
@@ -1590,6 +1628,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildDiseaseCard(String name, String imagePath) {
+    // Get confirmation source from disease info
+    final confirmedBy = _diseaseInfo[name]?['confirmedBy'] ?? 'Office of Carmen';
+    
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       shape: RoundedRectangleBorder(
@@ -1614,12 +1655,39 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: Text(
-                  name,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.verified,
+                          size: 14,
+                          color: Colors.green[700],
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Confirmed by $confirmedBy',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontStyle: FontStyle.italic,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
               const Icon(Icons.arrow_forward_ios, size: 20),
@@ -2053,5 +2121,28 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+
+  String _formatExpertLabel(String label) {
+    switch (label.toLowerCase()) {
+      case 'backterial_blackspot':
+      case 'bacterial blackspot':
+      case 'bacterial_blackspot':
+        return 'Bacterial black spot';
+      case 'powdery_mildew':
+      case 'powdery mildew':
+        return 'Powdery Mildew';
+      case 'tip_burn':
+      case 'tip burn':
+      case 'unknown':
+        return 'Unknown';
+      case 'healthy':
+        return 'Healthy';
+      default:
+        return label
+            .split('_')
+            .map((word) => word[0].toUpperCase() + word.substring(1))
+            .join(' ');
+    }
   }
 }
