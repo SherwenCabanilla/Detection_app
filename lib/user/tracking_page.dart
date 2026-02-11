@@ -422,6 +422,7 @@ class _TrackingPageState extends State<TrackingPage> {
     int diseased,
     int total,
     Map<String, int> overallCounts,
+    List<Map<String, dynamic>> chartData,
   ) {
     final healthPercentage = (healthy / total * 100).round();
 
@@ -463,6 +464,47 @@ class _TrackingPageState extends State<TrackingPage> {
       }
     }
 
+    // Calculate trend if chart data is available
+    double? overallChange;
+    String? trendKey;
+    Color? trendColor;
+    IconData? trendIcon;
+    String? changeValue;
+
+    if (chartData.length >= 2) {
+      final halfPoint = (chartData.length / 2).ceil();
+      double firstHalfTotal = 0;
+      double secondHalfTotal = 0;
+
+      for (int i = 0; i < halfPoint; i++) {
+        firstHalfTotal += (chartData[i]['healthy'] as num?)?.toDouble() ?? 0;
+      }
+      for (int i = halfPoint; i < chartData.length; i++) {
+        secondHalfTotal += (chartData[i]['healthy'] as num?)?.toDouble() ?? 0;
+      }
+
+      final firstHalfAvg = firstHalfTotal / halfPoint;
+      final secondHalfAvg = secondHalfTotal / (chartData.length - halfPoint);
+      overallChange = secondHalfAvg - firstHalfAvg;
+
+      changeValue =
+          '${overallChange >= 0 ? '+' : ''}${overallChange.toStringAsFixed(1)}%';
+
+      if (overallChange > 5) {
+        trendKey = 'trend_improving';
+        trendColor = Colors.green;
+        trendIcon = Icons.trending_up;
+      } else if (overallChange < -5) {
+        trendKey = 'trend_declining';
+        trendColor = Colors.red;
+        trendIcon = Icons.trending_down;
+      } else {
+        trendKey = 'trend_stable';
+        trendColor = Colors.blue;
+        trendIcon = Icons.trending_flat;
+      }
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -478,6 +520,7 @@ class _TrackingPageState extends State<TrackingPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Health Status Section
           Row(
             children: [
               Container(
@@ -532,6 +575,72 @@ class _TrackingPageState extends State<TrackingPage> {
               ),
             ],
           ),
+          // Overall Health Trend Section (if available)
+          if (chartData.length >= 2 && trendKey != null && trendColor != null && trendIcon != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: trendColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(trendIcon, color: trendColor, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tr('overall_health_trend'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        Text(
+                          tr(trendKey),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: trendColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: trendColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      changeValue!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: trendColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
@@ -605,6 +714,39 @@ class _TrackingPageState extends State<TrackingPage> {
                   _buildRecommendationItem(tr('rec_critical_expert')),
                   _buildRecommendationItem(tr('rec_critical_isolate')),
                 ],
+                // Add trend recommendation if available
+                if (chartData.length >= 2 && overallChange != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        overallChange < -5
+                            ? Icons.warning_amber_rounded
+                            : Icons.check_circle_outline,
+                        color:
+                            overallChange < -5
+                                ? Colors.orange[700]
+                                : Colors.green[700],
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          overallChange > 5
+                              ? tr('trend_rec_improving')
+                              : overallChange < -5
+                              ? tr('trend_rec_declining')
+                              : tr('trend_rec_stable'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -666,15 +808,6 @@ class _TrackingPageState extends State<TrackingPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Overall Trend Section
-          _buildOverallTrendSection(chartData),
-
-          // Divider
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Divider(height: 1, color: Colors.grey[300]),
-          ),
-
           // Disease-Specific Section
           _buildDiseaseSpecificSection(chartData, overallCounts),
         ],
@@ -682,224 +815,6 @@ class _TrackingPageState extends State<TrackingPage> {
     );
   }
 
-  Widget _buildOverallTrendSection(List<Map<String, dynamic>> chartData) {
-    if (chartData.length < 2) return const SizedBox.shrink();
-
-    // Get first half average and second half average
-    final halfPoint = (chartData.length / 2).ceil();
-    double firstHalfTotal = 0;
-    double secondHalfTotal = 0;
-
-    for (int i = 0; i < halfPoint; i++) {
-      firstHalfTotal += (chartData[i]['healthy'] as num?)?.toDouble() ?? 0;
-    }
-    for (int i = halfPoint; i < chartData.length; i++) {
-      secondHalfTotal += (chartData[i]['healthy'] as num?)?.toDouble() ?? 0;
-    }
-
-    final firstHalfAvg = firstHalfTotal / halfPoint;
-    final secondHalfAvg = secondHalfTotal / (chartData.length - halfPoint);
-    final overallChange = secondHalfAvg - firstHalfAvg;
-
-    // Determine trend status based on actual change
-    String trendKey;
-    Color trendColor;
-    IconData trendIcon;
-    String changeValue;
-
-    // Always show the actual change
-    changeValue =
-        '${overallChange >= 0 ? '+' : ''}${overallChange.toStringAsFixed(1)}%';
-
-    if (overallChange > 5) {
-      trendKey = 'trend_improving';
-      trendColor = Colors.green;
-      trendIcon = Icons.trending_up;
-    } else if (overallChange < -5) {
-      trendKey = 'trend_declining';
-      trendColor = Colors.red;
-      trendIcon = Icons.trending_down;
-    } else {
-      trendKey = 'trend_stable';
-      trendColor = Colors.blue;
-      trendIcon = Icons.trending_flat;
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Section Header
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.green[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.eco, color: Colors.green[700], size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tr('overall_health_trend'),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                  Text(
-                    tr('overall_health_trend_subtitle'),
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                trendColor.withOpacity(0.1),
-                trendColor.withOpacity(0.05),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: trendColor.withOpacity(0.3), width: 1.5),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: trendColor.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(trendIcon, color: trendColor, size: 24),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          tr('trend_analysis'),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        Text(
-                          tr(trendKey),
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: trendColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: trendColor.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      changeValue,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: trendColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.grey[200]!),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.lightbulb_outline,
-                          color: Colors.amber[700],
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          tr('trend_insights'),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[800],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(
-                          overallChange < -5
-                              ? Icons.warning_amber_rounded
-                              : Icons.check_circle_outline,
-                          color:
-                              overallChange < -5
-                                  ? Colors.orange[700]
-                                  : Colors.green[700],
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            overallChange > 5
-                                ? tr('trend_rec_improving')
-                                : overallChange < -5
-                                ? tr('trend_rec_declining')
-                                : tr('trend_rec_stable'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[800],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _buildDiseaseSpecificSection(
     List<Map<String, dynamic>> chartData,
@@ -2121,13 +2036,14 @@ class _TrackingPageState extends State<TrackingPage> {
                       ],
                     ),
                   ),
-                  // Health Insights
+                  // Health Insights (combined with trend)
                   if (total > 0)
                     _buildHealthInsights(
                       healthy,
                       totalDiseased,
                       total,
                       overallCounts,
+                      chartData,
                     ),
                   // Trend Bar Chart
                   Text(
