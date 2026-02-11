@@ -28,7 +28,74 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
   Timer? _heartbeatTimer;
 
   // Disease information loaded from Firestore (kept for potential future use)
+  // ignore: unused_field
   Map<String, Map<String, dynamic>> _diseaseInfo = {};
+
+  static const List<Map<String, String>> _knownDiseases = [
+    {'key': 'anthracnose', 'label': 'Anthracnose'},
+    {'key': 'bacterial_blackspot', 'label': 'Bacterial black spot'},
+    {'key': 'powdery_mildew', 'label': 'Powdery Mildew'},
+    {'key': 'dieback', 'label': 'Dieback'},
+  ];
+
+  Set<String> _predictedDiseasesFromRequest() {
+    final out = <String>{};
+
+    void addKey(String raw) {
+      final k = raw.trim().toLowerCase();
+      if (k.isEmpty) return;
+      if (k == 'healthy' || k == 'unknown' || k == 'tip_burn') return;
+      // normalize bacterial black spot spelling
+      if (k == 'backterial_blackspot') {
+        out.add('bacterial_blackspot');
+        return;
+      }
+      out.add(k);
+    }
+
+    // Prefer diseaseSummary if present
+    final summary = widget.request['diseaseSummary'];
+    if (summary is List) {
+      for (final item in summary) {
+        if (item is! Map) continue;
+        final label = item['label']?.toString();
+        if (label != null && label.isNotEmpty) {
+          addKey(label);
+          continue;
+        }
+        final name = item['name']?.toString();
+        if (name != null && name.isNotEmpty) {
+          // name may be formatted (e.g., "Anthracnose") so map via known list labels
+          final lower = name.trim().toLowerCase();
+          for (final d in _knownDiseases) {
+            if ((d['label'] ?? '').toLowerCase() == lower) {
+              addKey(d['key']!);
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback: parse images[].results[].disease
+    final images = widget.request['images'];
+    if (images is List) {
+      for (final img in images) {
+        if (img is! Map) continue;
+        final results = img['results'];
+        if (results is! List) continue;
+        for (final r in results) {
+          if (r is! Map) continue;
+          final d = r['disease']?.toString();
+          if (d != null) addKey(d);
+        }
+      }
+    }
+
+    // Only keep known diseases
+    final knownKeys = _knownDiseases.map((d) => d['key']!).toSet();
+    out.removeWhere((k) => !knownKeys.contains(k));
+    return out;
+  }
 
   @override
   void initState() {
@@ -259,9 +326,19 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
     final userProfile = userBox.get('userProfile');
     final expertName = userProfile?['fullName'] ?? 'Expert';
 
+    final now = DateTime.now().toIso8601String();
+    final predictedDiseases = _predictedDiseasesFromRequest().toList()..sort();
+    final modelPredictedHealthStatus =
+        predictedDiseases.isEmpty ? 'healthy' : 'not_healthy';
+
     final expertReview = {
       'comment': _commentController.text,
       'healthStatus': _selectedHealthStatus,
+      // Snapshot the model prediction at review time for later evaluation scripts.
+      // Expert does NOT need to confirm diseases for binary evaluation.
+      'modelPredictedDiseases': predictedDiseases,
+      'modelPredictedHealthStatus': modelPredictedHealthStatus,
+      'modelPredictedAt': now,
       'expertName': expertName,
       'expertUid': user.uid,
     };
@@ -280,7 +357,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
             'expertReview': expertReview,
             'expertName': expertName,
             'expertUid': user.uid,
-            'reviewedAt': DateTime.now().toIso8601String(),
+            'reviewedAt': now,
             // Remove the claim fields
             'reviewingBy': FieldValue.delete(),
             'reviewingByUid': FieldValue.delete(),
@@ -1106,6 +1183,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
     );
   }
 
+  // ignore: unused_element
   void _showHealthyStatus(BuildContext context) {
     final images = widget.request['images'] as List<dynamic>? ?? [];
     final healthyDetections = <Map<String, dynamic>>[];
@@ -1264,6 +1342,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
     );
   }
 
+  // ignore: unused_element
   void _showDetectionDetails(
     BuildContext context,
     String diseaseName,
@@ -1839,6 +1918,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
     return diseaseColors[diseaseName.toLowerCase()] ?? Colors.grey;
   }
 
+  // ignore: unused_element
   Color _getSeverityColor(String severity) {
     switch (severity.toLowerCase()) {
       case 'high':
