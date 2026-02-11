@@ -22,7 +22,7 @@ class TFLiteDetector {
   Interpreter? _interpreter;
   List<String> _labels = [];
   static const double confidenceThreshold =
-      0.5; // Set to 50% confidence threshold
+      0.75; // Set to 50% confidence threshold
   static const double nmsThreshold =
       0.3; // Increased from 0.1 to 0.3 to allow more detections
   static const int inputSize = 640;

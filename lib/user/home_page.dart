@@ -763,6 +763,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showDiseaseDetails(String name, String imagePath) {
+    final nameLower = name.toLowerCase();
+    final isNoneDisease = nameLower == 'none disease' || nameLower == 'healthy';
+    
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -774,7 +777,7 @@ class _HomePageState extends State<HomePage> {
               confirmedBy:
                   _diseaseInfo[name]?['confirmedBy'] ??
                   tr('agricultural_office'),
-              details: {
+              details: isNoneDisease ? {} : {
                 tr('treatments'):
                     (getLocalizedTreatments(context, name) ??
                         (_diseaseInfo[name]?['treatments'] ?? [])),

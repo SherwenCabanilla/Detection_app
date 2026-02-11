@@ -2051,6 +2051,13 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
       }
     }
 
+    final diseaseKeyLower = diseaseKey.toLowerCase();
+    final nameLower = name.toLowerCase();
+    final isNoneDisease = diseaseKeyLower == 'none disease' || 
+                         diseaseKeyLower == 'healthy' ||
+                         nameLower == 'none disease' || 
+                         nameLower == 'healthy';
+    
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -2063,7 +2070,7 @@ class _UserRequestDetailState extends State<UserRequestDetail> {
                       : _getDiseaseImagePath(diseaseKey),
               scientificName: info?['scientificName'] ?? '',
               confirmedBy: info?['confirmedBy'] ?? tr('agricultural_office'),
-              details: {
+              details: isNoneDisease ? {} : {
                 tr('treatments'):
                     (getLocalizedTreatments(context, diseaseKey) ??
                         ((info?['treatments'] as List?)?.cast<String>() ?? [])),

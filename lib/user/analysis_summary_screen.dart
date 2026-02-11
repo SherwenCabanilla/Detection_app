@@ -312,6 +312,34 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                                 );
                             if (chosenName == null) return;
                             final autoName = chosenName;
+                            
+                            // Show confirmation dialog
+                            final confirmed = await showDialog<bool>(
+                              context: ctx,
+                              builder: (confirmCtx) => AlertDialog(
+                                title: Text(tr('confirm_tracking_name')),
+                                content: Text(
+                                  tr('confirm_tracking_name_message', namedArgs: {'name': autoName}),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(confirmCtx, false),
+                                    child: Text(tr('cancel')),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () => Navigator.pop(confirmCtx, true),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: Text(tr('confirm')),
+                                  ),
+                                ],
+                              ),
+                            );
+                            
+                            if (confirmed != true) return; // User cancelled confirmation
+                            
                             final created = {
                               'id': id,
                               'name': autoName,
@@ -990,13 +1018,19 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     );
   }
 
-  Future<void> _sendForExternalReview() async {
-    print('DEBUG: _sendForExternalReview called');
+  Future<void> _handleNextStep() async {
+    // First step: Select tracking group
     final tg = await _ensureTrackingGroupSelected();
     if (tg == null) {
-      // user cancelled selection
+      // User cancelled selection
       return;
     }
+    // Second step: Send for review
+    await _sendForExternalReview(tg);
+  }
+
+  Future<void> _sendForExternalReview(Map<String, String> tg) async {
+    print('DEBUG: _sendForExternalReview called');
     if (_serviceUnavailable) {
       await _showServiceUnavailableDialog();
       return;
@@ -1325,6 +1359,13 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
       }
     }
 
+    final diseaseKeyLower = diseaseKey.toLowerCase();
+    final nameLower = name.toLowerCase();
+    final isNoneDisease = diseaseKeyLower == 'none disease' || 
+                         diseaseKeyLower == 'healthy' ||
+                         nameLower == 'none disease' || 
+                         nameLower == 'healthy';
+    
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1333,7 +1374,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
           imagePath: imagePath.isEmpty ? 'assets/replace_disease/healthy_image.jpg' : imagePath,
           scientificName: info?['scientificName'] ?? '',
           confirmedBy: info?['confirmedBy'] ?? tr('agricultural_office'),
-          details: {
+          details: isNoneDisease ? {} : {
             tr('treatments'):
                 (getLocalizedTreatments(context, diseaseKey) ??
                     ((info?['treatments'] as List?)?.cast<String>() ?? [])),
@@ -2851,6 +2892,15 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                             fontStyle: FontStyle.italic,
                           ),
                         ),
+                        const SizedBox(height: 4),
+                        Text(
+                          tr('bounding_box_note'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -2887,9 +2937,9 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                   height: 50,
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: _hasWarnings() ? null : _sendForExternalReview,
-                    icon: const Icon(Icons.send),
-                    label: Text(tr('send_for_review')),
+                    onPressed: _hasWarnings() ? null : _handleNextStep,
+                    icon: const Icon(Icons.arrow_forward),
+                    label: Text(tr('next')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _hasWarnings() ? Colors.grey : Colors.green,
                       foregroundColor: Colors.white,
