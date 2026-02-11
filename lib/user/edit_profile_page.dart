@@ -19,6 +19,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _addressController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
+  String? _initialEmail;
   bool _isLoading = false;
   bool _isLoadingData = true;
   final ImagePicker _picker = ImagePicker();
@@ -50,7 +51,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
             _fullNameController.text = data['fullName'] ?? '';
             _addressController.text = data['address'] ?? '';
             _phoneController.text = data['phoneNumber'] ?? '';
-            _emailController.text = data['email'] ?? '';
+            _initialEmail = (data['email'] ?? '').toString();
+            _emailController.text = _initialEmail ?? '';
             _profileImageUrl = data['imageProfile'];
             _isLoadingData = false;
           });
@@ -167,6 +169,22 @@ class _EditProfilePageState extends State<EditProfilePage> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
+        final currentEmail = _emailController.text.trim().toLowerCase();
+        final initialEmail = (_initialEmail ?? '').trim().toLowerCase();
+        if (initialEmail.isNotEmpty && currentEmail != initialEmail) {
+          setState(() {
+            _isLoading = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Email cannot be changed to avoid duplicates.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          _emailController.text = _initialEmail ?? _emailController.text;
+          return;
+        }
+
         String? newImageUrl = _profileImageUrl;
 
         // Upload new profile image if selected
@@ -182,7 +200,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
               'fullName': _fullNameController.text.trim(),
               'address': _addressController.text.trim(),
               'phoneNumber': _phoneController.text.trim(),
-              'email': _emailController.text.trim(),
               if (newImageUrl != null) 'imageProfile': newImageUrl,
             });
 
@@ -231,6 +248,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     String? Function(String?)? validator,
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
+    bool enabled = true,
   }) {
     final errorText = _hasValidated ? _fieldErrors[fieldKey] : null;
     final hasError = errorText != null && errorText.isNotEmpty;
@@ -240,6 +258,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       children: [
         TextField(
           controller: controller,
+          enabled: enabled,
           style: const TextStyle(color: Colors.white),
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
@@ -490,6 +509,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                             prefixIcon: Icons.email,
                             validator: _validateEmail,
                             keyboardType: TextInputType.emailAddress,
+                            enabled: false,
                           ),
                           const SizedBox(height: 30),
                           // Save Button

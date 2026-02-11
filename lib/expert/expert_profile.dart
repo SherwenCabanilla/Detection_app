@@ -794,6 +794,7 @@ class _ExpertProfileState extends State<ExpertProfile> {
       IconData? prefixIcon,
       TextInputType? keyboardType,
       List<TextInputFormatter>? inputFormatters,
+      bool enabled = true,
     }) {
       return ValueListenableBuilder<Map<String, String?>>(
         valueListenable: fieldErrors,
@@ -806,6 +807,7 @@ class _ExpertProfileState extends State<ExpertProfile> {
             children: [
               TextField(
                 controller: controller,
+                enabled: enabled,
                 keyboardType: keyboardType,
                 inputFormatters: inputFormatters,
                 onChanged: (value) {
@@ -943,6 +945,7 @@ class _ExpertProfileState extends State<ExpertProfile> {
                       validator: validateEmail,
                       prefixIcon: Icons.email,
                       keyboardType: TextInputType.emailAddress,
+                      enabled: false,
                     ),
                     const SizedBox(height: 12),
                     buildValidatedTextField(
@@ -993,7 +996,6 @@ class _ExpertProfileState extends State<ExpertProfile> {
                                   .doc(user.uid)
                                   .update({
                                     'fullName': nameController.text.trim(),
-                                    'email': emailController.text.trim(),
                                     'phoneNumber': phoneController.text.trim(),
                                     'address': addressController.text.trim(),
                                   });
@@ -1001,7 +1003,6 @@ class _ExpertProfileState extends State<ExpertProfile> {
                               // Update local state
                               setState(() {
                                 _userName = nameController.text.trim();
-                                _userEmail = emailController.text.trim();
                                 _userPhone = phoneController.text.trim();
                                 _userAddress = addressController.text.trim();
                               });

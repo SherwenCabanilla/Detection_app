@@ -38,6 +38,7 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
   final Map<String, Size> imageSizes = {};
   bool showBoundingBoxes = false;
   bool _isSubmitting = false;
+  bool _serviceUnavailable = false;
   // final ReviewManager _reviewManager = ReviewManager();
 
   // Disease information loaded from Firestore
@@ -554,8 +555,114 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     );
   }
 
+  Future<void> _saveOfflineToTracking() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final userId = user?.uid ?? 'unknown';
+    final box = await Hive.openBox('trackingBox');
+    final List sessions = box.get('scans', defaultValue: []);
+    final now = DateTime.now().toIso8601String();
+    final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
+
+    final List<Map<String, dynamic>> images = [];
+    for (int i = 0; i < widget.imagePaths.length; i++) {
+      final results = widget.allResults[i] ?? [];
+      final resultList =
+          results
+              .map(
+                (r) => {
+                  'disease': r.label,
+                  'confidence': r.confidence,
+                  'boundingBox': {
+                    'left': r.boundingBox.left,
+                    'top': r.boundingBox.top,
+                    'right': r.boundingBox.right,
+                    'bottom': r.boundingBox.bottom,
+                  },
+                },
+              )
+              .toList();
+
+      // Always store local file path for offline tracking
+      final imageFile = File(widget.imagePaths[i]);
+      final imageBytes = await imageFile.readAsBytes();
+      final imageInfo = await img.decodeImage(imageBytes);
+      final imageWidth = (imageInfo?.width ?? 0).toDouble();
+      final imageHeight = (imageInfo?.height ?? 0).toDouble();
+
+      images.add({
+        'imageUrl': '', // offline
+        'path': widget.imagePaths[i],
+        'imageWidth': imageWidth,
+        'imageHeight': imageHeight,
+        'results': resultList.isNotEmpty
+            ? resultList
+            : [
+                {'disease': 'Unknown', 'confidence': null}
+              ],
+      });
+    }
+
+    sessions.add({
+      'sessionId': sessionId,
+      'date': now,
+      'images': images,
+      'source': 'tracking',
+      'userId': userId,
+    });
+    await box.put('scans', sessions);
+  }
+
+  Future<void> _showServiceUnavailableDialog() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(tr('service_unavailable_title')),
+          content: Text(tr('service_unavailable_body')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(tr('close')),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                try {
+                  await _saveOfflineToTracking();
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(tr('saved_offline_to_tracking')),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                      margin: const EdgeInsets.only(
+                        bottom: 70,
+                        left: 16,
+                        right: 16,
+                      ),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                      ),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                } catch (_) {}
+              },
+              child: Text(tr('add_to_tracking')),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _sendForExternalReview() async {
     print('DEBUG: _sendForExternalReview called');
+    if (_serviceUnavailable) {
+      await _showServiceUnavailableDialog();
+      return;
+    }
     setState(() {
       _isSubmitting = true;
     });
@@ -714,20 +821,10 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     } catch (e) {
       if (mounted) {
         Navigator.of(context, rootNavigator: true).pop(); // Dismiss dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              tr('error_sending_for_review', namedArgs: {'error': '$e'}),
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.only(bottom: 70, left: 16, right: 16),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        setState(() {
+          _serviceUnavailable = true;
+        });
+        await _showServiceUnavailableDialog();
       }
     } finally {
       if (mounted) {
