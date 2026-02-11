@@ -10,6 +10,8 @@ import 'package:hive/hive.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../user/disease_details_page.dart';
+import '../user/disease_treatments_i18n.dart';
 
 class ScanRequestDetail extends StatefulWidget {
   final Map<String, dynamic> request;
@@ -1131,6 +1133,7 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                     color,
                     Icons.warning_rounded,
                     isLast: isLast,
+                    diseaseKey: rawDiseaseName,
                   );
                 }).toList(),
             ],
@@ -1145,7 +1148,12 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
     Color color,
     IconData icon, {
     bool isLast = false,
+    String? diseaseKey,
   }) {
+    final isHealthy = name.toLowerCase() == 'healthy';
+    final isUnknown = name.toLowerCase() == 'unknown';
+    final showRecommendation = diseaseKey != null && !isHealthy && !isUnknown;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -1178,6 +1186,28 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
               ),
             ),
           ),
+          if (showRecommendation)
+            TextButton(
+              onPressed: () => _showDiseaseRecommendation(name, diseaseKey),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.green,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.medical_services_outlined, size: 14),
+                  const SizedBox(width: 4),
+                  Text(
+                    tr('recommendation'),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -2119,6 +2149,97 @@ class _ScanRequestDetailState extends State<ScanRequestDetail> {
                       : _buildCompletedReview(),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  String _getDiseaseImagePath(String disease) {
+    final lower = disease.toLowerCase();
+    if (lower.contains('anthracnose')) {
+      return 'assets/replace_disease/anthracnose_image.jpg';
+    } else if (lower.contains('bacterial') || lower.contains('backterial')) {
+      return 'assets/replace_disease/bacterial_image.jpg';
+    } else if (lower.contains('dieback')) {
+      return 'assets/replace_disease/dieback_image.jpg';
+    } else if (lower.contains('powdery')) {
+      return 'assets/replace_disease/powdery_image.jpg';
+    } else {
+      return 'assets/replace_disease/healthy_image.jpg';
+    }
+  }
+
+  void _showDiseaseRecommendation(String formattedName, String diseaseKey) async {
+    // Load disease info if not already loaded
+    if (_diseaseInfo.isEmpty) {
+      await _loadDiseaseInfo();
+    }
+
+    // Try to find disease info by matching the formatted name
+    Map<String, dynamic>? info;
+
+    // First try exact match
+    info = _diseaseInfo[formattedName];
+
+    // If not found, try case-insensitive match
+    if (info == null) {
+      for (var key in _diseaseInfo.keys) {
+        if (key.toLowerCase() == formattedName.toLowerCase()) {
+          info = _diseaseInfo[key];
+          break;
+        }
+      }
+    }
+
+    // If still not found, try matching using disease key variations
+    if (info == null) {
+      final label = diseaseKey.toLowerCase();
+      final Map<String, List<String>> keyToNames = {
+        'anthracnose': ['Anthracnose'],
+        'bacterial_blackspot': ['Bacterial black spot', 'Bacterial Black Spot'],
+        'backterial_blackspot': ['Bacterial black spot', 'Bacterial Black Spot'],
+        'dieback': ['Dieback'],
+        'powdery_mildew': ['Powdery mildew', 'Powdery Mildew'],
+      };
+
+      final possibleNames = keyToNames[label];
+      if (possibleNames != null) {
+        for (var possibleName in possibleNames) {
+          if (_diseaseInfo.containsKey(possibleName)) {
+            info = _diseaseInfo[possibleName];
+            break;
+          }
+          for (var key in _diseaseInfo.keys) {
+            if (key.toLowerCase() == possibleName.toLowerCase()) {
+              info = _diseaseInfo[key];
+              break;
+            }
+          }
+          if (info != null) break;
+        }
+      }
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DiseaseDetailsPage(
+          name: formattedName,
+          imagePath: _getDiseaseImagePath(diseaseKey),
+          scientificName: info?['scientificName'] ?? '',
+          confirmedBy: info?['confirmedBy'] ?? tr('agricultural_office'),
+          details: {
+            tr('treatments'):
+                (getLocalizedTreatments(context, diseaseKey) ??
+                    ((info?['treatments'] as List?)?.cast<String>() ?? [])),
+            tr('preventive_measures'):
+                (getLocalizedPreventiveMeasures(context, diseaseKey) ??
+                        const <String>[])
+                    .isNotEmpty
+                    ? (getLocalizedPreventiveMeasures(context, diseaseKey) ??
+                        const <String>[])
+                    : <String>[tr('not_applicable')],
+          },
         ),
       ),
     );

@@ -371,5 +371,10 @@
   "confirm_treatments_applied": "Naaplikar na ba nimo ang girekomendang tambal? Isapon kini nga report sa Tracking para sa pagsubay sa progreso.",
   "mark_applied": "Markahi",
   "treatments_applied_success": "Na-mark na nga naaplikar ang tambal. Ablihan ang Tracking…",
-  "failed_to_update": "Napakyas pag-update"
+  "failed_to_update": "Napakyas pag-update",
+  "delete_tracking_group": "Kuhaa ang Tracking Group",
+  "delete_tracking_group_confirm": "Sigurado ka ba nga gusto nimo kuhaaon ang \"{name}\"? Mawala ang tanan nga scan sessions niini nga group. Dili na kini mabalik.",
+  "tracking_group_deleted": "Na-delete na ang tracking group.",
+  "failed_to_delete_tracking_group": "Napakyas pagkuha sa tracking group.",
+  "recommendation": "Rekomendasyon"
 }

@@ -368,5 +368,10 @@
   "confirm_treatments_applied": "Have you already applied the recommended treatments? This report will be included in Tracking for progress monitoring.",
   "mark_applied": "Mark applied",
   "treatments_applied_success": "Marked as treatments applied. Opening Tracking…",
-  "failed_to_update": "Failed to update"
+  "failed_to_update": "Failed to update",
+  "delete_tracking_group": "Delete Tracking Group",
+  "delete_tracking_group_confirm": "Are you sure you want to delete \"{name}\"? All scan sessions in this group will be unlinked. This cannot be undone.",
+  "tracking_group_deleted": "Tracking group deleted.",
+  "failed_to_delete_tracking_group": "Failed to delete tracking group.",
+  "recommendation": "Recommendation"
 }

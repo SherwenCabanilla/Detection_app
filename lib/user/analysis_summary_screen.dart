@@ -93,6 +93,23 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     }
   }
 
+  Future<String> _getFarmerLastName() async {
+    try {
+      final userBox = await Hive.openBox('userBox');
+      final profile = userBox.get('userProfile');
+      final fullName = profile?['fullName']?.toString() ?? 'Farmer';
+
+      // Extract last name (last word in full name)
+      final nameParts = fullName.trim().split(' ');
+      if (nameParts.isNotEmpty) {
+        return nameParts.last;
+      }
+      return 'Farmer';
+    } catch (_) {
+      return 'Farmer';
+    }
+  }
+
   /// Handle Android back button / system back navigation.
   /// If a send-to-expert operation is in progress, ask the user whether to cancel it.
   Future<bool> _onWillPop() async {
@@ -249,8 +266,6 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                   ?.toString();
         }
 
-        String defaultNameForIndex(int idx) => '${tr('tracking_group')} $idx';
-
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
             final groups = visibleGroups();
@@ -258,237 +273,287 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
                 groupsAllLocal
                     .map((g) => (g['name'] ?? '').toString())
                     .toList();
+
+            // Extract numbers from existing names (looking for pattern: ... 001, ... 002, etc.)
             final nextIndex =
                 existingNames
                     .map((n) {
-                      final m = RegExp(r'(\d+)$').firstMatch(n.trim());
+                      // Match number at the end (after space, for format: "LastName --date 001")
+                      final m = RegExp(r'\s+(\d+)$').firstMatch(n.trim());
                       return m != null ? int.tryParse(m.group(1)!) : null;
                     })
                     .whereType<int>()
                     .fold<int>(0, (a, b) => a > b ? a : b) +
                 1;
 
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              ),
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tr('select_tracking_group'),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        tr('tracking_group_help'),
-                        style: TextStyle(color: Colors.grey[700]),
-                      ),
-                      const SizedBox(height: 12),
-                      if (groups.isNotEmpty)
-                        DropdownButtonFormField<String>(
-                          value: selectedId,
-                          isExpanded: true,
-                          items:
-                              groups.map((g) {
-                                final id = (g['id'] ?? '').toString();
-                                final name = (g['name'] ?? '').toString();
-                                return DropdownMenuItem(
-                                  value: id,
-                                  child: Text(name),
-                                );
-                              }).toList(),
-                          onChanged: (v) {
-                            final g = groups.firstWhere(
-                              (e) => (e['id'] ?? '').toString() == v,
-                              orElse: () => {},
-                            );
-                            setSheetState(() {
-                              selectedId = v;
-                              selectedName = (g['name'] ?? '').toString();
-                            });
-                          },
-                          decoration: InputDecoration(
-                            labelText: tr('add_to_existing_group'),
-                            border: const OutlineInputBorder(),
-                          ),
-                        ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green[700],
-                            foregroundColor: Colors.white,
-                          ),
-                          onPressed: () async {
-                            final id =
-                                DateTime.now().millisecondsSinceEpoch
-                                    .toString();
-                            final controller = TextEditingController(
-                              text: defaultNameForIndex(nextIndex),
-                            );
-                            final chosenName = await showDialog<String>(
-                              context: ctx,
-                              builder:
-                                  (dctx) => AlertDialog(
-                                    title: Text(tr('name_new_tracking')),
-                                    content: TextField(
-                                      controller: controller,
-                                      decoration: InputDecoration(
-                                        hintText: tr('tracking_name_hint'),
-                                      ),
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(dctx),
-                                        child: Text(tr('cancel')),
-                                      ),
-                                      TextButton(
-                                        onPressed: () {
-                                          final v = controller.text.trim();
-                                          if (v.isEmpty) {
-                                            ScaffoldMessenger.of(
-                                              dctx,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  tr('tracking_name_required'),
-                                                ),
-                                                backgroundColor: Colors.red,
-                                                behavior:
-                                                    SnackBarBehavior.floating,
-                                              ),
-                                            );
-                                            return;
-                                          }
-                                          Navigator.pop(dctx, v);
-                                        },
-                                        child: Text(tr('create')),
-                                      ),
-                                    ],
-                                  ),
-                            );
-                            if (chosenName == null) return;
-                            final autoName = chosenName;
+            // Helper function to generate default name
+            Future<String> getDefaultName(int idx) async {
+              final lastName = await _getFarmerLastName();
+              final now = DateTime.now();
+              // Month abbreviations
+              const monthNames = [
+                'Jan',
+                'Feb',
+                'Mar',
+                'Apr',
+                'May',
+                'Jun',
+                'Jul',
+                'Aug',
+                'Sep',
+                'Oct',
+                'Nov',
+                'Dec',
+              ];
+              final monthAbbr = monthNames[now.month - 1];
+              final dateStr = '$monthAbbr ${now.day},${now.year}';
+              final numStr = idx.toString().padLeft(3, '0');
+              return '$lastName - $dateStr - $numStr';
+            }
 
-                            // Show confirmation dialog
-                            final confirmed = await showDialog<bool>(
-                              context: ctx,
-                              builder:
-                                  (confirmCtx) => AlertDialog(
-                                    title: Text(tr('confirm_tracking_name')),
-                                    content: Text(
-                                      tr(
-                                        'confirm_tracking_name_message',
-                                        namedArgs: {'name': autoName},
-                                      ),
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed:
-                                            () => Navigator.pop(
-                                              confirmCtx,
-                                              false,
-                                            ),
-                                        child: Text(tr('cancel')),
-                                      ),
-                                      ElevatedButton(
-                                        onPressed:
-                                            () =>
-                                                Navigator.pop(confirmCtx, true),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.green,
-                                          foregroundColor: Colors.white,
-                                        ),
-                                        child: Text(tr('confirm')),
-                                      ),
-                                    ],
-                                  ),
-                            );
+            return FutureBuilder<String>(
+              future: getDefaultName(nextIndex),
+              builder: (context, snapshot) {
+                final defaultName =
+                    snapshot.data ?? '${tr('tracking_group')} $nextIndex';
 
-                            if (confirmed != true)
-                              return; // User cancelled confirmation
-
-                            final created = {
-                              'id': id,
-                              'name': autoName,
-                              'createdAt': DateTime.now().toIso8601String(),
-                              'ended': false,
-                            };
-                            final updated = [created, ...groupsAllLocal];
-                            await _saveTrackingGroups(updated);
-                            await _upsertTrackingGroupRemote(created);
-                            await _saveLastTrackingGroup(id, autoName);
-                            if (ctx.mounted) {
-                              Navigator.pop(ctx, {'id': id, 'name': autoName});
-                            }
-                          },
-                          icon: const Icon(Icons.add),
-                          label: Text(
-                            '${tr('create_new_group')} (${defaultNameForIndex(nextIndex)})',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                  ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => Navigator.pop(ctx, null),
-                              child: Text(tr('cancel')),
+                          Text(
+                            tr('select_tracking_group'),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
+                          const SizedBox(height: 8),
+                          Text(
+                            tr('tracking_group_help'),
+                            style: TextStyle(color: Colors.grey[700]),
+                          ),
+                          const SizedBox(height: 12),
+                          if (groups.isNotEmpty)
+                            DropdownButtonFormField<String>(
+                              value: selectedId,
+                              isExpanded: true,
+                              items:
+                                  groups.map((g) {
+                                    final id = (g['id'] ?? '').toString();
+                                    final name = (g['name'] ?? '').toString();
+                                    return DropdownMenuItem(
+                                      value: id,
+                                      child: Text(name),
+                                    );
+                                  }).toList(),
+                              onChanged: (v) {
+                                final g = groups.firstWhere(
+                                  (e) => (e['id'] ?? '').toString() == v,
+                                  orElse: () => {},
+                                );
+                                setSheetState(() {
+                                  selectedId = v;
+                                  selectedName = (g['name'] ?? '').toString();
+                                });
+                              },
+                              decoration: InputDecoration(
+                                labelText: tr('add_to_existing_group'),
+                                border: const OutlineInputBorder(),
+                              ),
+                            ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
+                                backgroundColor: Colors.green[700],
                                 foregroundColor: Colors.white,
                               ),
                               onPressed: () async {
-                                if (selectedId != null &&
-                                    (selectedName ?? '').isNotEmpty) {
-                                  await _saveLastTrackingGroup(
-                                    selectedId!,
-                                    selectedName!,
-                                  );
-                                  if (ctx.mounted) {
-                                    Navigator.pop(ctx, {
-                                      'id': selectedId!,
-                                      'name': selectedName!,
-                                    });
-                                  }
-                                  return;
-                                }
-                                // Nothing chosen
-                                ScaffoldMessenger.of(ctx).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      tr('tracking_group_required'),
-                                    ),
-                                    backgroundColor: Colors.red,
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
+                                final id =
+                                    DateTime.now().millisecondsSinceEpoch
+                                        .toString();
+                                final defaultName = await getDefaultName(
+                                  nextIndex,
                                 );
+                                final controller = TextEditingController(
+                                  text: defaultName,
+                                );
+                                final chosenName = await showDialog<String>(
+                                  context: ctx,
+                                  builder:
+                                      (dctx) => AlertDialog(
+                                        title: Text(tr('name_new_tracking')),
+                                        content: TextField(
+                                          controller: controller,
+                                          decoration: InputDecoration(
+                                            hintText: tr('tracking_name_hint'),
+                                          ),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed:
+                                                () => Navigator.pop(dctx),
+                                            child: Text(tr('cancel')),
+                                          ),
+                                          TextButton(
+                                            onPressed: () {
+                                              final v = controller.text.trim();
+                                              if (v.isEmpty) {
+                                                ScaffoldMessenger.of(
+                                                  dctx,
+                                                ).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      tr(
+                                                        'tracking_name_required',
+                                                      ),
+                                                    ),
+                                                    backgroundColor: Colors.red,
+                                                    behavior:
+                                                        SnackBarBehavior
+                                                            .floating,
+                                                  ),
+                                                );
+                                                return;
+                                              }
+                                              Navigator.pop(dctx, v);
+                                            },
+                                            child: Text(tr('create')),
+                                          ),
+                                        ],
+                                      ),
+                                );
+                                if (chosenName == null) return;
+                                final autoName = chosenName;
+
+                                // Show confirmation dialog
+                                final confirmed = await showDialog<bool>(
+                                  context: ctx,
+                                  builder:
+                                      (confirmCtx) => AlertDialog(
+                                        title: Text(
+                                          tr('confirm_tracking_name'),
+                                        ),
+                                        content: Text(
+                                          tr(
+                                            'confirm_tracking_name_message',
+                                            namedArgs: {'name': autoName},
+                                          ),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed:
+                                                () => Navigator.pop(
+                                                  confirmCtx,
+                                                  false,
+                                                ),
+                                            child: Text(tr('cancel')),
+                                          ),
+                                          ElevatedButton(
+                                            onPressed:
+                                                () => Navigator.pop(
+                                                  confirmCtx,
+                                                  true,
+                                                ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.green,
+                                              foregroundColor: Colors.white,
+                                            ),
+                                            child: Text(tr('confirm')),
+                                          ),
+                                        ],
+                                      ),
+                                );
+
+                                if (confirmed != true)
+                                  return; // User cancelled confirmation
+
+                                final created = {
+                                  'id': id,
+                                  'name': autoName,
+                                  'createdAt': DateTime.now().toIso8601String(),
+                                  'ended': false,
+                                };
+                                final updated = [created, ...groupsAllLocal];
+                                await _saveTrackingGroups(updated);
+                                await _upsertTrackingGroupRemote(created);
+                                await _saveLastTrackingGroup(id, autoName);
+                                if (ctx.mounted) {
+                                  Navigator.pop(ctx, {
+                                    'id': id,
+                                    'name': autoName,
+                                  });
+                                }
                               },
-                              child: Text(tr('continue')),
+                              icon: const Icon(Icons.add),
+                              label: Text(
+                                '${tr('create_new_group')} ($defaultName)',
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () => Navigator.pop(ctx, null),
+                                  child: Text(tr('cancel')),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  onPressed: () async {
+                                    if (selectedId != null &&
+                                        (selectedName ?? '').isNotEmpty) {
+                                      await _saveLastTrackingGroup(
+                                        selectedId!,
+                                        selectedName!,
+                                      );
+                                      if (ctx.mounted) {
+                                        Navigator.pop(ctx, {
+                                          'id': selectedId!,
+                                          'name': selectedName!,
+                                        });
+                                      }
+                                      return;
+                                    }
+                                    // Nothing chosen
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          tr('tracking_group_required'),
+                                        ),
+                                        backgroundColor: Colors.red,
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  },
+                                  child: Text(tr('continue')),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             );
           },
         );
@@ -2963,6 +3028,8 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
         'date': now,
         'images': images,
         'source': 'tracking',
+        'trackingGroupId': _trackingGroupId,
+        'trackingGroupName': _trackingGroupName,
       });
       await box.put('scans', sessions);
       print('DEBUG: sessions after add: ' + sessions.toString());
@@ -2976,6 +3043,8 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
             'images': images,
             'source': 'tracking',
             'userId': userId,
+            'trackingGroupId': _trackingGroupId,
+            'trackingGroupName': _trackingGroupName,
           });
       // --- End upload to Firestore ---
       // --- Also write to scan_requests so it appears under Recent Activity ---
@@ -2994,6 +3063,8 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
               'submittedAt': now,
               'images': images,
               'diseaseSummary': diseaseCounts,
+              'trackingGroupId': _trackingGroupId,
+              'trackingGroupName': _trackingGroupName,
             });
       } catch (e) {
         // Non-fatal: tracking saved; recent activity write failed

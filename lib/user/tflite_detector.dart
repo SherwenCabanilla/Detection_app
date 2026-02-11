@@ -30,13 +30,13 @@ class TFLiteDetector {
   List<String> _classificationLabels = [];
 
   static const double confidenceThreshold =
-      0.10; // YOLO confidence threshold (higher = fewer, more reliable boxes)
+      0.20; // YOLO confidence threshold (higher = fewer, more reliable boxes)
   static const double nmsThreshold =
       0.9; // NMS IoU: balances merging overlaps vs keeping neighbors
   static const double mobilenetConfidenceThreshold =
-      0.75; // Minimum confidence threshold for MobileNet classification
+      0.75; // Minimum confidence threshold
   static const int yoloInputSize = 640;
-  static const int mobilenetInputSize = 224; // MobileNetV3 input size
+  static const int mobilenetInputSize = 224; // input size
   static const double defaultTemperature =
       1.0; // Default temperature for softmax (1.0 = no scaling, higher = less overconfident)
 

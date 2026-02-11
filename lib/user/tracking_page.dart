@@ -27,6 +27,7 @@ class _TrackingPageState extends State<TrackingPage> {
   String? _selectedTrackingGroupId;
   final Map<String, bool> _endedGroups = <String, bool>{};
   final Map<String, String> _groupNames = <String, String>{};
+  final Set<String> _deletedGroupIds = <String>{};
 
   Future<String?> _currentUserId() async {
     try {
@@ -45,12 +46,46 @@ class _TrackingPageState extends State<TrackingPage> {
         .collection('tracking_groups');
   }
 
+  /// Firestore document reference for storing deleted tracking group IDs
+  DocumentReference<Map<String, dynamic>> _deletedGroupIdsRef(String userId) {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('tracking_meta')
+        .doc('deleted_groups');
+  }
+
   Future<void> _loadTrackingGroupMeta() async {
     try {
       final box = await Hive.openBox('trackingGroupsBox');
-      // Try Firestore first so data survives cache clears; fall back to Hive.
+
+      // Load deleted group IDs from local Hive first
+      final deletedRaw = box.get('deletedGroupIds', defaultValue: []);
+      final Set<String> deletedIds = {};
+      if (deletedRaw is List) {
+        for (final id in deletedRaw) {
+          if (id is String && id.isNotEmpty) deletedIds.add(id);
+        }
+      }
+
+      // Try Firestore first so data survives cache clears and reinstalls
       final userId = await _currentUserId();
       if (userId != null && userId.isNotEmpty) {
+        // Load deleted group IDs from Firestore (survives reinstalls)
+        try {
+          final deletedDoc = await _deletedGroupIdsRef(userId).get();
+          if (deletedDoc.exists) {
+            final remoteDeleted = deletedDoc.data()?['ids'];
+            if (remoteDeleted is List) {
+              for (final id in remoteDeleted) {
+                if (id is String && id.isNotEmpty) deletedIds.add(id);
+              }
+              // Sync back to local Hive
+              await box.put('deletedGroupIds', deletedIds.toList());
+            }
+          }
+        } catch (_) {}
+
         try {
           final snap =
               await _trackingGroupsRef(
@@ -75,13 +110,16 @@ class _TrackingPageState extends State<TrackingPage> {
       for (final item in raw) {
         if (item is! Map) continue;
         final id = (item['id'] ?? '').toString();
-        if (id.isEmpty) continue;
+        if (id.isEmpty || deletedIds.contains(id)) continue;
         ended[id] = item['ended'] == true;
         final n = (item['name'] ?? '').toString().trim();
         if (n.isNotEmpty) names[id] = n;
       }
       if (mounted) {
         setState(() {
+          _deletedGroupIds
+            ..clear()
+            ..addAll(deletedIds);
           _endedGroups
             ..clear()
             ..addAll(ended);
@@ -90,6 +128,9 @@ class _TrackingPageState extends State<TrackingPage> {
             ..addAll(names);
         });
       } else {
+        _deletedGroupIds
+          ..clear()
+          ..addAll(deletedIds);
         _endedGroups
           ..clear()
           ..addAll(ended);
@@ -225,6 +266,49 @@ class _TrackingPageState extends State<TrackingPage> {
     await _loadTrackingGroupMeta();
   }
 
+  Future<void> _deleteTrackingGroup(String groupId, String groupName) async {
+    // Remove from local Hive groups list
+    final box = await Hive.openBox('trackingGroupsBox');
+    final raw = box.get('groups', defaultValue: []);
+    if (raw is List) {
+      final updated = raw
+          .whereType<Map>()
+          .where((g) => (g['id'] ?? '').toString() != groupId)
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+      await box.put('groups', updated);
+    }
+
+    // Persist deleted group ID so it stays hidden even after reload and reinstall
+    _deletedGroupIds.add(groupId);
+    await box.put('deletedGroupIds', _deletedGroupIds.toList());
+
+    // Remove group doc from Firestore + save deleted IDs to Firestore
+    final userId = await _currentUserId();
+    if (userId != null && userId.isNotEmpty) {
+      try {
+        await _trackingGroupsRef(userId).doc(groupId).delete();
+      } catch (_) {}
+      // Persist deleted IDs to Firestore so they survive reinstalls
+      try {
+        await _deletedGroupIdsRef(userId).set({
+          'ids': _deletedGroupIds.toList(),
+          'updatedAt': DateTime.now().toIso8601String(),
+        });
+      } catch (_) {}
+    }
+
+    // Remove from local state
+    _endedGroups.remove(groupId);
+    _groupNames.remove(groupId);
+
+    // If this was the selected group, clear selection
+    if (_selectedTrackingGroupId == groupId) {
+      _selectedTrackingGroupId = null;
+      await _saveSelectedTrackingGroupId(null);
+    }
+  }
+
   Future<String?> _pickTrackingGroup(
     List<Map<String, String>> active,
     List<Map<String, String>> ended,
@@ -236,95 +320,157 @@ class _TrackingPageState extends State<TrackingPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (ctx) {
-        Widget sectionHeader(String text) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: Colors.grey[700],
-              ),
-            ),
-          );
-        }
+        // Make mutable copies so we can remove items on delete
+        final activeLocal = List<Map<String, String>>.from(active);
+        final endedLocal = List<Map<String, String>>.from(ended);
 
-        Widget itemTile(Map<String, String> g, {required bool isEnded}) {
-          return ListTile(
-            title: Text(g['name'] ?? ''),
-            trailing:
-                isEnded
-                    ? Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        tr('ended'),
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                    )
-                    : null,
-            onTap: () => Navigator.pop(ctx, g['id']),
-          );
-        }
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            Widget sectionHeader(String text) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+                child: Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              );
+            }
 
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-                child: Row(
+            Widget itemTile(Map<String, String> g, {required bool isEnded}) {
+              return ListTile(
+                title: Text(g['name'] ?? ''),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: Text(
-                        tr('select_tracking_group'),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                    if (isEnded)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          tr('ended'),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
                         ),
                       ),
-                    ),
+                    const SizedBox(width: 4),
                     IconButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      icon: const Icon(Icons.close),
+                      icon: Icon(Icons.delete_outline, color: Colors.red[400], size: 20),
+                      tooltip: tr('delete'),
+                      onPressed: () async {
+                        final groupId = g['id'] ?? '';
+                        final groupName = g['name'] ?? '';
+                        // Confirm deletion
+                        final confirm = await showDialog<bool>(
+                          context: ctx,
+                          builder: (dCtx) => AlertDialog(
+                            title: Text(tr('delete_tracking_group')),
+                            content: Text(
+                              tr('delete_tracking_group_confirm', namedArgs: {'name': groupName}),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(dCtx, false),
+                                child: Text(tr('cancel')),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(dCtx, true),
+                                child: Text(
+                                  tr('delete'),
+                                  style: const TextStyle(color: Colors.red),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm != true) return;
+
+                        await _deleteTrackingGroup(groupId, groupName);
+
+                        // Update the sheet UI
+                        setSheetState(() {
+                          activeLocal.removeWhere((e) => e['id'] == groupId);
+                          endedLocal.removeWhere((e) => e['id'] == groupId);
+                        });
+
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                              content: Text(tr('tracking_group_deleted')),
+                              backgroundColor: Colors.green,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      },
                     ),
                   ],
                 ),
+                onTap: () => Navigator.pop(ctx, g['id']),
+              );
+            }
+
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            tr('select_tracking_group'),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        if (activeLocal.isNotEmpty) ...[
+                          sectionHeader(tr('active_trackings')),
+                          ...activeLocal.map((g) => itemTile(g, isEnded: false)),
+                        ],
+                        if (endedLocal.isNotEmpty) ...[
+                          sectionHeader(tr('ended_trackings')),
+                          ...endedLocal.map((g) => itemTile(g, isEnded: true)),
+                          const SizedBox(height: 8),
+                        ],
+                        if (activeLocal.isEmpty && endedLocal.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(tr('no_tracking_groups')),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    if (active.isNotEmpty) ...[
-                      sectionHeader(tr('active_trackings')),
-                      ...active.map((g) => itemTile(g, isEnded: false)),
-                    ],
-                    if (ended.isNotEmpty) ...[
-                      sectionHeader(tr('ended_trackings')),
-                      ...ended.map((g) => itemTile(g, isEnded: true)),
-                      const SizedBox(height: 8),
-                    ],
-                    if (active.isEmpty && ended.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(tr('no_tracking_groups')),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -680,16 +826,18 @@ class _TrackingPageState extends State<TrackingPage> {
               .where('userId', isEqualTo: userId)
               .get();
 
+      // Include all tracking sessions (tracking, completed, reviewed)
       final cloudSessions =
           trackingQuery.docs
               .map((doc) => Map<String, dynamic>.from(doc.data()))
               .where((s) {
                 final src = (s['source'] ?? s['status'] ?? '').toString();
-                return src == 'completed' || src == 'reviewed';
+                return src == 'tracking' || src == 'completed' || src == 'reviewed';
               })
               .toList();
 
       // Build scan requests list but skip those with status 'tracking' to avoid duplicates
+      // (they are already loaded from the 'tracking' collection above)
       final List<Map<String, dynamic>> scanRequests = [];
       for (final doc in scanRequestsQuery.docs) {
         final data = Map<String, dynamic>.from(doc.data());
@@ -698,7 +846,7 @@ class _TrackingPageState extends State<TrackingPage> {
           // This entry is also present in 'tracking' collection; skip to prevent duplicates
           continue;
         }
-        // Only expert-validated entries matter for treatment progress monitoring groups
+        // Include expert-validated entries
         if (status != 'completed' && status != 'reviewed') {
           continue;
         }
@@ -718,6 +866,7 @@ class _TrackingPageState extends State<TrackingPage> {
       }
 
       // Merge and de-duplicate by sessionId, preferring entries from 'tracking' collection
+      // but preserving trackingGroupId/Name from scan_requests if the tracking entry is missing it
       final Map<String, Map<String, dynamic>> byId = {};
       for (final s in scanRequests) {
         final id = (s['sessionId'] ?? '').toString();
@@ -725,7 +874,28 @@ class _TrackingPageState extends State<TrackingPage> {
       }
       for (final s in cloudSessions) {
         final id = (s['sessionId'] ?? s['id'] ?? '').toString();
-        if (id.isNotEmpty) byId[id] = s; // overwrite with tracking
+        if (id.isNotEmpty) {
+          // If tracking entry is missing group info, inherit from scan_requests
+          final existing = byId[id];
+          if (existing != null) {
+            final trackingGroupId = (s['trackingGroupId'] ?? '').toString();
+            final existingGroupId = (existing['trackingGroupId'] ?? '').toString();
+            if (trackingGroupId.isEmpty && existingGroupId.isNotEmpty) {
+              s['trackingGroupId'] = existing['trackingGroupId'];
+              s['trackingGroupName'] = existing['trackingGroupName'];
+              // Best-effort: backfill the tracking doc in Firestore so future loads are correct
+              FirebaseFirestore.instance
+                  .collection('tracking')
+                  .doc(s['sessionId'] ?? id)
+                  .set({
+                    'trackingGroupId': existing['trackingGroupId'],
+                    'trackingGroupName': existing['trackingGroupName'],
+                  }, SetOptions(merge: true))
+                  .catchError((_) {}); // fire-and-forget
+            }
+          }
+          byId[id] = s; // overwrite with tracking
+        }
       }
       final sessions = byId.values.toList();
 
@@ -2324,10 +2494,12 @@ class _TrackingPageState extends State<TrackingPage> {
         Hive.openBox('trackingBox').then((box) => box.put('scans', sessions));
 
         // Build tracking-group list from sessions (including legacy "Ungrouped")
+        // Skip deleted groups so they don't reappear from session data
         final Map<String, String> groupMap = {};
         for (final s in sessions) {
           final g = _groupKeyFromSession(s);
           if (g == null) continue;
+          if (_deletedGroupIds.contains(g['id'])) continue;
           groupMap[g['id']!] = g['name']!;
         }
         final activeGroups = <Map<String, String>>[];
@@ -2430,7 +2602,12 @@ class _TrackingPageState extends State<TrackingPage> {
                                 activeGroups,
                                 endedGroups,
                               );
-                              if (picked == null) return;
+                              // Refresh group metadata in case groups were deleted
+                              await _loadTrackingGroupMeta();
+                              if (picked == null) {
+                                setState(() {}); // refresh UI after potential deletes
+                                return;
+                              }
                               setState(() => _selectedTrackingGroupId = picked);
                               await _saveSelectedTrackingGroupId(picked);
                             },

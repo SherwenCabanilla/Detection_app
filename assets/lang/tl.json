@@ -372,5 +372,10 @@
   "confirm_treatments_applied": "Nailapat mo na ba ang inirerekomendang paggamot? Isasama ang ulat na ito sa Tracking para sa pagsubaybay ng progreso.",
   "mark_applied": "Markahan",
   "treatments_applied_success": "Nai-mark na bilang nailapat ang paggamot. Binubuksan ang Tracking…",
-  "failed_to_update": "Nabigong i-update"
+  "delete_tracking_group": "Burahin ang Tracking Group",
+  "delete_tracking_group_confirm": "Sigurado ka bang gusto mong burahin ang \"{name}\"? Mawawala ang lahat ng scan sessions sa group na ito. Hindi na ito mababawi.",
+  "tracking_group_deleted": "Na-delete na ang tracking group.",
+  "failed_to_delete_tracking_group": "Hindi ma-delete ang tracking group.",
+  "failed_to_update": "Nabigong i-update",
+  "recommendation": "Rekomendasyon"
 }
