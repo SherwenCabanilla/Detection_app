@@ -242,6 +242,20 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  // Helper method to convert Firestore data to Hive-compatible format
+  Map<String, dynamic> _convertFirestoreDataForHive(Map<String, dynamic> data) {
+    final convertedData = <String, dynamic>{};
+    data.forEach((key, value) {
+      if (value is Timestamp) {
+        // Convert Firestore Timestamp to ISO 8601 string
+        convertedData[key] = value.toDate().toIso8601String();
+      } else {
+        convertedData[key] = value;
+      }
+    });
+    return convertedData;
+  }
+
   void _listenToProfileUpdates() {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -250,14 +264,20 @@ class _ProfilePageState extends State<ProfilePage> {
           .doc(user.uid)
           .snapshots()
           .listen((snapshot) async {
-            if (snapshot.exists) {
+            if (snapshot.exists && snapshot.data() != null) {
               final data = snapshot.data() as Map<String, dynamic>;
 
-              // Save to Hive cache
-              final userBox = await Hive.openBox('userBox');
-              await userBox.put('userProfile', data);
+              // Save to Hive cache - convert Timestamps first
+              try {
+                final userBox = await Hive.openBox('userBox');
+                final hiveCompatibleData = _convertFirestoreDataForHive(data);
+                await userBox.put('userProfile', hiveCompatibleData);
+                print('✅ Profile updated in Hive cache: ${data['fullName']}');
+              } catch (e) {
+                print('❌ Error updating Hive cache: $e');
+              }
 
-              // Update UI
+              // Update UI - always update when Firestore data changes
               if (mounted) {
                 setState(() {
                   _userName = data['fullName'] ?? 'Unknown User';
@@ -272,7 +292,9 @@ class _ProfilePageState extends State<ProfilePage> {
                               imageProfile.toString().isNotEmpty)
                           ? imageProfile.toString()
                           : null;
+                  _isLoading = false;
                 });
+                print('✅ Profile UI updated: ${data['fullName']}');
               }
             }
           });
@@ -281,56 +303,80 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _loadUserData() async {
     try {
-      final userBox = await Hive.openBox('userBox');
-      final localProfile = userBox.get('userProfile');
-      if (localProfile != null) {
-        setState(() {
-          _userName = localProfile['fullName'] ?? 'Unknown User';
-          _userRole = localProfile['role'] ?? 'Farmer';
-          _userEmail = localProfile['email'] ?? '';
-          _userPhone = localProfile['phoneNumber'] ?? '';
-          _userAddress = localProfile['address'] ?? '';
-          // Only set profile image URL if it's not null and not empty
-          final imageProfile = localProfile['imageProfile'];
-          _profileImageUrl =
-              (imageProfile != null && imageProfile.toString().isNotEmpty)
-                  ? imageProfile.toString()
-                  : null;
-          _isLoading = false;
-        });
-        return;
-      }
-      // If not found locally, try Firestore (online)
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        final userDoc =
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
-                .get();
-        if (userDoc.exists) {
-          final data = userDoc.data() as Map<String, dynamic>;
+        // Always fetch fresh data from Firestore first
+        try {
+          final userDoc =
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.uid)
+                  .get();
+          
+          if (userDoc.exists && userDoc.data() != null) {
+            final data = userDoc.data() as Map<String, dynamic>;
+            
+            // Update Hive cache with fresh data (convert Timestamps first)
+            try {
+              final userBox = await Hive.openBox('userBox');
+              final hiveCompatibleData = _convertFirestoreDataForHive(data);
+              await userBox.put('userProfile', hiveCompatibleData);
+            } catch (e) {
+              print('⚠️ Error saving to Hive cache: $e');
+            }
+            
+            // Update UI with fresh data
+            if (mounted) {
+              setState(() {
+                _userName = data['fullName'] ?? 'Unknown User';
+                _userRole = data['role'] ?? 'Farmer';
+                _userEmail = data['email'] ?? '';
+                _userPhone = data['phoneNumber'] ?? '';
+                _userAddress = data['address'] ?? '';
+                // Only set profile image URL if it's not null and not empty
+                final imageProfile = data['imageProfile'];
+                _profileImageUrl =
+                    (imageProfile != null && imageProfile.toString().isNotEmpty)
+                        ? imageProfile.toString()
+                        : null;
+                _isLoading = false;
+              });
+            }
+            print('✅ Profile loaded from Firestore: ${data['fullName']}');
+            return;
+          }
+        } catch (e) {
+          print('⚠️ Error fetching from Firestore, trying cache: $e');
+        }
+        
+        // Fallback to cached data if Firestore fails
+        final userBox = await Hive.openBox('userBox');
+        final localProfile = userBox.get('userProfile');
+        if (localProfile != null && mounted) {
           setState(() {
-            _userName = data['fullName'] ?? 'Unknown User';
-            _userRole = data['role'] ?? 'Farmer';
-            _userEmail = data['email'] ?? '';
-            _userPhone = data['phoneNumber'] ?? '';
-            _userAddress = data['address'] ?? '';
+            _userName = localProfile['fullName'] ?? 'Unknown User';
+            _userRole = localProfile['role'] ?? 'Farmer';
+            _userEmail = localProfile['email'] ?? '';
+            _userPhone = localProfile['phoneNumber'] ?? '';
+            _userAddress = localProfile['address'] ?? '';
             // Only set profile image URL if it's not null and not empty
-            final imageProfile = data['imageProfile'];
+            final imageProfile = localProfile['imageProfile'];
             _profileImageUrl =
                 (imageProfile != null && imageProfile.toString().isNotEmpty)
                     ? imageProfile.toString()
                     : null;
             _isLoading = false;
           });
+          print('✅ Profile loaded from cache: ${localProfile['fullName']}');
         }
       }
     } catch (e) {
-      print('Error loading user data: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      print('❌ Error loading user data: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -811,15 +857,30 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ),
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            tooltip: 'Refresh Profile',
+            onPressed: () async {
+              setState(() {
+                _isLoading = true;
+              });
+              await _loadUserData();
+            },
+          ),
+        ],
       ),
       body:
           user == null
               ? const Center(child: Text('Not logged in'))
               : _isLoading
               ? const Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-                child: Column(
-                  children: [
+              : RefreshIndicator(
+                onRefresh: _loadUserData,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    children: [
                     // Profile Header
                     Container(
                       color: Colors.green[50],
@@ -1529,7 +1590,8 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 24),
                     // App Version
                     const SizedBox(height: 24),
-                  ],
+                    ],
+                  ),
                 ),
               ),
     );

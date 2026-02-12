@@ -143,6 +143,20 @@ class _ExpertProfileState extends State<ExpertProfile> {
     );
   }
 
+  // Helper method to convert Firestore data to Hive-compatible format
+  Map<String, dynamic> _convertFirestoreDataForHive(Map<String, dynamic> data) {
+    final convertedData = <String, dynamic>{};
+    data.forEach((key, value) {
+      if (value is Timestamp) {
+        // Convert Firestore Timestamp to ISO 8601 string
+        convertedData[key] = value.toDate().toIso8601String();
+      } else {
+        convertedData[key] = value;
+      }
+    });
+    return convertedData;
+  }
+
   void _listenToProfileUpdates() {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -151,14 +165,20 @@ class _ExpertProfileState extends State<ExpertProfile> {
           .doc(user.uid)
           .snapshots()
           .listen((snapshot) async {
-            if (snapshot.exists) {
+            if (snapshot.exists && snapshot.data() != null) {
               final data = snapshot.data() as Map<String, dynamic>;
 
-              // Save to Hive cache
-              final userBox = await Hive.openBox('userBox');
-              await userBox.put('userProfile', data);
+              // Save to Hive cache - convert Timestamps first
+              try {
+                final userBox = await Hive.openBox('userBox');
+                final hiveCompatibleData = _convertFirestoreDataForHive(data);
+                await userBox.put('userProfile', hiveCompatibleData);
+                print('✅ Expert profile updated in Hive cache: ${data['fullName']}');
+              } catch (e) {
+                print('❌ Error updating Hive cache: $e');
+              }
 
-              // Update UI
+              // Update UI - always update when Firestore data changes
               if (mounted) {
                 setState(() {
                   _userName = data['fullName'] ?? 'Unknown Expert';
@@ -173,7 +193,9 @@ class _ExpertProfileState extends State<ExpertProfile> {
                               imageProfile.toString().isNotEmpty)
                           ? imageProfile.toString()
                           : null;
+                  _isLoading = false;
                 });
+                print('✅ Expert profile UI updated: ${data['fullName']}');
               }
             }
           });
@@ -192,50 +214,67 @@ class _ExpertProfileState extends State<ExpertProfile> {
 
   Future<void> _loadUserData() async {
     try {
-      final userBox = await Hive.openBox('userBox');
-      final localProfile = userBox.get('userProfile');
-      if (localProfile != null) {
-        setState(() {
-          _userName = localProfile['fullName'] ?? 'Unknown Expert';
-          _userRole = localProfile['role'] ?? 'Expert';
-          _userEmail = localProfile['email'] ?? '';
-          _userPhone = localProfile['phoneNumber'] ?? '';
-          _userAddress = localProfile['address'] ?? '';
-          // Only set profile image URL if it's not null and not empty
-          final imageProfile = localProfile['imageProfile'];
-          _profileImageUrl =
-              (imageProfile != null && imageProfile.toString().isNotEmpty)
-                  ? imageProfile.toString()
-                  : null;
-          _isLoading = false;
-        });
-
-        // Load member since even when using local data
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          _loadMemberSince(user);
-        }
-        return;
-      }
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        // Fetch user profile from Firestore
-        final userDoc =
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
-                .get();
+        // Always fetch fresh data from Firestore first
+        try {
+          final userDoc =
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.uid)
+                  .get();
 
-        if (userDoc.exists) {
-          final data = userDoc.data() as Map<String, dynamic>;
+          if (userDoc.exists && userDoc.data() != null) {
+            final data = userDoc.data() as Map<String, dynamic>;
+
+            // Update Hive cache with fresh data (convert Timestamps first)
+            try {
+              final userBox = await Hive.openBox('userBox');
+              final hiveCompatibleData = _convertFirestoreDataForHive(data);
+              await userBox.put('userProfile', hiveCompatibleData);
+            } catch (e) {
+              print('⚠️ Error saving to Hive cache: $e');
+            }
+
+            // Update UI with fresh data
+            if (mounted) {
+              setState(() {
+                _userName = data['fullName'] ?? 'Unknown Expert';
+                _userRole = data['role'] ?? 'Expert';
+                _userEmail = data['email'] ?? '';
+                _userPhone = data['phoneNumber'] ?? '';
+                _userAddress = data['address'] ?? '';
+                // Only set profile image URL if it's not null and not empty
+                final imageProfile = data['imageProfile'];
+                _profileImageUrl =
+                    (imageProfile != null && imageProfile.toString().isNotEmpty)
+                        ? imageProfile.toString()
+                        : null;
+                _isLoading = false;
+              });
+            }
+
+            // Load member since
+            _loadMemberSince(user);
+            print('✅ Expert profile loaded from Firestore: ${data['fullName']}');
+            return;
+          }
+        } catch (e) {
+          print('⚠️ Error fetching from Firestore, trying cache: $e');
+        }
+
+        // Fallback to cached data if Firestore fails
+        final userBox = await Hive.openBox('userBox');
+        final localProfile = userBox.get('userProfile');
+        if (localProfile != null && mounted) {
           setState(() {
-            _userName = data['fullName'] ?? 'Unknown Expert';
-            _userRole = data['role'] ?? 'Expert';
-            _userEmail = data['email'] ?? '';
-            _userPhone = data['phoneNumber'] ?? '';
-            _userAddress = data['address'] ?? '';
+            _userName = localProfile['fullName'] ?? 'Unknown Expert';
+            _userRole = localProfile['role'] ?? 'Expert';
+            _userEmail = localProfile['email'] ?? '';
+            _userPhone = localProfile['phoneNumber'] ?? '';
+            _userAddress = localProfile['address'] ?? '';
             // Only set profile image URL if it's not null and not empty
-            final imageProfile = data['imageProfile'];
+            final imageProfile = localProfile['imageProfile'];
             _profileImageUrl =
                 (imageProfile != null && imageProfile.toString().isNotEmpty)
                     ? imageProfile.toString()
@@ -243,15 +282,18 @@ class _ExpertProfileState extends State<ExpertProfile> {
             _isLoading = false;
           });
 
-          // Load member since
+          // Load member since even when using local data
           _loadMemberSince(user);
+          print('✅ Expert profile loaded from cache: ${localProfile['fullName']}');
         }
       }
     } catch (e) {
-      print('Error loading user data: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      print('❌ Error loading user data: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -1348,9 +1390,12 @@ class _ExpertProfileState extends State<ExpertProfile> {
               ? const Center(child: Text('Not logged in'))
               : _isLoading
               ? const Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-                child: Column(
-                  children: [
+              : RefreshIndicator(
+                onRefresh: _loadUserData,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    children: [
                     // Profile Card
                     Container(
                       color: Colors.green[50],
@@ -1830,7 +1875,8 @@ class _ExpertProfileState extends State<ExpertProfile> {
                     const SizedBox(height: 24),
                     // App Version
                     const SizedBox(height: 24),
-                  ],
+                    ],
+                  ),
                 ),
               ),
     );
