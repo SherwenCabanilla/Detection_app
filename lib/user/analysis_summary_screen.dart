@@ -15,6 +15,7 @@ import 'tflite_detector.dart';
 import 'detection_painter.dart';
 import 'disease_details_page.dart';
 import 'disease_treatments_i18n.dart';
+import '../shared/tracking_hive_boxes.dart';
 // import 'detection_carousel_screen.dart';
 // import 'detection_result_card.dart';
 // import 'tracking_page.dart';
@@ -152,7 +153,10 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
     super.dispose();
   }
 
-  Future<Box> _trackingGroupsBox() => Hive.openBox('trackingGroupsBox');
+  Future<Box> _trackingGroupsBox() async {
+    final userId = await _currentUserId();
+    return Hive.openBox(TrackingHiveBoxes.groupsBoxName(userId));
+  }
 
   Future<String?> _currentUserId() async {
     try {
@@ -1320,7 +1324,9 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
   Future<void> _saveOfflineToTracking() async {
     final user = FirebaseAuth.instance.currentUser;
     final userId = user?.uid ?? 'unknown';
-    final box = await Hive.openBox('trackingBox');
+    final box = await Hive.openBox(
+      TrackingHiveBoxes.sessionCacheBoxName(user?.uid),
+    );
     final List sessions = box.get('scans', defaultValue: []);
     final now = DateTime.now().toIso8601String();
     final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
@@ -1571,7 +1577,9 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
           }).toList();
 
       // --- Also add to tracking (history) ---
-      final box = await Hive.openBox('trackingBox');
+      final box = await Hive.openBox(
+        TrackingHiveBoxes.sessionCacheBoxName(user?.uid),
+      );
       final List sessions = box.get('scans', defaultValue: []);
       final now = DateTime.now().toIso8601String();
       final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
@@ -3109,7 +3117,9 @@ class _AnalysisSummaryScreenState extends State<AnalysisSummaryScreen> {
       // final _userProfile = UserProfile();
       final user = FirebaseAuth.instance.currentUser;
       final userId = user?.uid ?? 'unknown';
-      final box = await Hive.openBox('trackingBox');
+      final box = await Hive.openBox(
+        TrackingHiveBoxes.sessionCacheBoxName(user?.uid),
+      );
       final List sessions = box.get('scans', defaultValue: []);
       final now = DateTime.now().toIso8601String();
       final sessionId = DateTime.now().millisecondsSinceEpoch.toString();

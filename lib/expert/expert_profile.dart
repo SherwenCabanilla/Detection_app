@@ -15,6 +15,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/painting.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../shared/tracking_hive_boxes.dart';
 
 class ExpertProfile extends StatefulWidget {
   const ExpertProfile({Key? key}) : super(key: key);
@@ -57,14 +58,26 @@ class _ExpertProfileState extends State<ExpertProfile> {
   }
 
   Future<void> _wipeAllLocalData() async {
+    String? profileUid;
+    try {
+      if (Hive.isBoxOpen('userBox')) {
+        profileUid =
+            Hive.box('userBox').get('userProfile')?['userId']?.toString();
+      } else {
+        final ub = await Hive.openBox('userBox');
+        profileUid = ub.get('userProfile')?['userId']?.toString();
+      }
+    } catch (_) {}
+
     try {
       // Clear FCM token from current user's Firestore document before logout
       try {
         final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
+        final uid = user?.uid ?? profileUid;
+        if (uid != null && uid.isNotEmpty) {
           await FirebaseFirestore.instance
               .collection('users')
-              .doc(user.uid)
+              .doc(uid)
               .update({'fcmToken': FieldValue.delete()});
         }
       } catch (_) {}
@@ -75,8 +88,17 @@ class _ExpertProfileState extends State<ExpertProfile> {
         await FirebaseFirestore.instance.clearPersistence();
       } catch (_) {}
 
-      // Delete Hive boxes if present
-      for (final name in ['userBox', 'trackingBox', 'diseaseBox', 'settings']) {
+      final boxNames = <String>{
+        'userBox',
+        'diseaseBox',
+        'settings',
+        ...TrackingHiveBoxes.legacyBoxNames,
+        if (profileUid != null && profileUid.isNotEmpty) ...[
+          TrackingHiveBoxes.groupsBoxName(profileUid),
+          TrackingHiveBoxes.sessionCacheBoxName(profileUid),
+        ],
+      };
+      for (final name in boxNames) {
         try {
           if (Hive.isBoxOpen(name)) {
             final box = Hive.box(name);

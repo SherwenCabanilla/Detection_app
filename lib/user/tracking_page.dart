@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'tracking_models.dart';
+import '../shared/tracking_hive_boxes.dart';
 // Bounding boxes for tracking modal will be drawn with a lightweight painter below
 
 class TrackingPage extends StatefulWidget {
@@ -20,11 +21,6 @@ class TrackingPage extends StatefulWidget {
 }
 
 class _TrackingPageState extends State<TrackingPage> {
-  int _selectedRangeIndex = 0; // 0: Last 7 Days, 1: Monthly, 2: Custom
-  DateTime? _customStartDate;
-  DateTime? _customEndDate;
-  int? _monthlyYear;
-  int? _monthlyMonth; // 1-12
   String? _selectedTrackingGroupId;
   final Map<String, bool> _endedGroups = <String, bool>{};
   final Map<String, String> _groupNames = <String, String>{};
@@ -40,6 +36,16 @@ class _TrackingPageState extends State<TrackingPage> {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<Box> _openTrackingGroupsBox() async {
+    final uid = await _currentUserId();
+    return Hive.openBox(TrackingHiveBoxes.groupsBoxName(uid));
+  }
+
+  Future<Box> _openTrackingSessionBox() async {
+    final uid = await _currentUserId();
+    return Hive.openBox(TrackingHiveBoxes.sessionCacheBoxName(uid));
   }
 
   CollectionReference<Map<String, dynamic>> _trackingGroupsRef(String userId) {
@@ -60,7 +66,8 @@ class _TrackingPageState extends State<TrackingPage> {
 
   Future<void> _loadTrackingGroupMeta() async {
     try {
-      final box = await Hive.openBox('trackingGroupsBox');
+      final userId = await _currentUserId();
+      final box = await Hive.openBox(TrackingHiveBoxes.groupsBoxName(userId));
 
       // Load deleted group IDs from local Hive first
       final deletedRaw = box.get('deletedGroupIds', defaultValue: []);
@@ -72,7 +79,6 @@ class _TrackingPageState extends State<TrackingPage> {
       }
 
       // Try Firestore first so data survives cache clears and reinstalls
-      final userId = await _currentUserId();
       if (userId != null && userId.isNotEmpty) {
         // Load deleted group IDs from Firestore (survives reinstalls)
         try {
@@ -151,7 +157,7 @@ class _TrackingPageState extends State<TrackingPage> {
   }
 
   Future<void> _endTrackingGroup(String id, {String? name}) async {
-    final box = await Hive.openBox('trackingGroupsBox');
+    final box = await _openTrackingGroupsBox();
     final raw = box.get('groups', defaultValue: []);
     if (raw is! List) return;
     final List<Map<String, dynamic>> groups =
@@ -203,7 +209,8 @@ class _TrackingPageState extends State<TrackingPage> {
     await _loadTrackingGroupMeta();
   }
 
-  Future<void> _renameTrackingGroup(String id, String currentName) async {
+  /// Returns the new name if saved, or `null` if cancelled.
+  Future<String?> _renameTrackingGroup(String id, String currentName) async {
     final controller = TextEditingController(text: currentName);
     final newName = await showDialog<String>(
       context: context,
@@ -213,6 +220,7 @@ class _TrackingPageState extends State<TrackingPage> {
           content: TextField(
             controller: controller,
             decoration: InputDecoration(hintText: tr('rename_tracking_hint')),
+            autofocus: true,
           ),
           actions: [
             TextButton(
@@ -240,39 +248,82 @@ class _TrackingPageState extends State<TrackingPage> {
         );
       },
     );
-    if (newName == null) return;
+    // Dialog route may still hold the TextField for a frame after pop; disposing
+    // the controller immediately triggers framework _dependents.isEmpty asserts.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.dispose();
+    });
+    if (newName == null) return null;
 
-    final box = await Hive.openBox('trackingGroupsBox');
+    final box = await _openTrackingGroupsBox();
     final raw = box.get('groups', defaultValue: []);
-    if (raw is! List) return;
+    if (raw is! List) return null;
     final List<Map<String, dynamic>> groups =
         raw.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+    var found = false;
     for (final g in groups) {
       if ((g['id'] ?? '').toString() == id) {
         g['name'] = newName;
+        found = true;
+        break;
       }
+    }
+    // Groups that only exist on past sessions were never in Hive — add them so rename sticks.
+    if (!found) {
+      final now = DateTime.now().toIso8601String();
+      groups.add({
+        'id': id,
+        'name': newName,
+        'createdAt': now,
+        'ended': _endedGroups[id] == true,
+      });
     }
     await box.put('groups', groups);
     await box.put('lastGroupName', newName);
     await box.put('lastGroupId', id);
 
-    // Persist to Firestore (best-effort)
     final userId = await _currentUserId();
     if (userId != null && userId.isNotEmpty) {
       try {
+        final now = DateTime.now().toIso8601String();
         await _trackingGroupsRef(userId).doc(id).set({
           'id': id,
           'name': newName,
-          'updatedAt': DateTime.now().toIso8601String(),
+          'updatedAt': now,
+          if (!found) 'createdAt': now,
         }, SetOptions(merge: true));
-      } catch (_) {}
+        await _propagateTrackingGroupNameToSessions(
+          userId: userId,
+          groupId: id,
+          name: newName,
+        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${tr('rename_tracking')}: $e'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          setState(() {
+            _groupNames[id] = newName;
+          });
+        }
+        return newName;
+      }
     }
     await _loadTrackingGroupMeta();
+    if (mounted) {
+      _initSessionsFuture();
+      setState(() {});
+    }
+    return newName;
   }
 
   Future<void> _deleteTrackingGroup(String groupId, String groupName) async {
     // Remove from local Hive groups list
-    final box = await Hive.openBox('trackingGroupsBox');
+    final box = await _openTrackingGroupsBox();
     final raw = box.get('groups', defaultValue: []);
     if (raw is List) {
       final updated = raw
@@ -370,6 +421,33 @@ class _TrackingPageState extends State<TrackingPage> {
                         ),
                       ),
                     const SizedBox(width: 4),
+                    IconButton(
+                      icon: Icon(
+                        Icons.edit_outlined,
+                        color: Colors.blueGrey[700],
+                        size: 20,
+                      ),
+                      tooltip: tr('rename_tracking'),
+                      onPressed: () async {
+                        final groupId = g['id'] ?? '';
+                        final groupName = g['name'] ?? '';
+                        final updated =
+                            await _renameTrackingGroup(groupId, groupName);
+                        if (updated == null || !ctx.mounted) return;
+                        setSheetState(() {
+                          void patch(List<Map<String, String>> list) {
+                            final i = list.indexWhere(
+                              (e) => e['id'] == groupId,
+                            );
+                            if (i >= 0) {
+                              list[i] = {'id': groupId, 'name': updated};
+                            }
+                          }
+                          patch(activeLocal);
+                          patch(endedLocal);
+                        });
+                      },
+                    ),
                     IconButton(
                       icon: Icon(Icons.delete_outline, color: Colors.red[400], size: 20),
                       tooltip: tr('delete'),
@@ -486,7 +564,6 @@ class _TrackingPageState extends State<TrackingPage> {
     // Only load once to prevent flickering when navigating back to this page
     if (!_hasLoadedMeta) {
       _hasLoadedMeta = true;
-      _loadSelectedRangeIndex();
       _loadSelectedTrackingGroupId();
       _loadTrackingGroupMeta();
       // Initialize sessions future once
@@ -505,7 +582,7 @@ class _TrackingPageState extends State<TrackingPage> {
 
   Future<void> _loadSelectedTrackingGroupId() async {
     try {
-      final box = await Hive.openBox('trackingBox');
+      final box = await _openTrackingSessionBox();
       final v = box.get('selectedTrackingGroupId');
       if (v is String && v.isNotEmpty) {
         setState(() => _selectedTrackingGroupId = v);
@@ -515,7 +592,7 @@ class _TrackingPageState extends State<TrackingPage> {
 
   Future<void> _saveSelectedTrackingGroupId(String? id) async {
     try {
-      final box = await Hive.openBox('trackingBox');
+      final box = await _openTrackingSessionBox();
       await box.put('selectedTrackingGroupId', id ?? '');
     } catch (_) {}
   }
@@ -523,8 +600,52 @@ class _TrackingPageState extends State<TrackingPage> {
   Map<String, String>? _groupKeyFromSession(Map<String, dynamic> s) {
     final rawId = (s['trackingGroupId'] ?? '').toString();
     if (rawId.isEmpty) return null; // ignore ungrouped legacy entries
-    final rawName = (s['trackingGroupName'] ?? '').toString();
-    return {'id': rawId, 'name': rawName.isEmpty ? rawId : rawName};
+    // Prefer name on each Firestore doc (matches console edits on tracking/scan_requests).
+    // Fall back to users/.../tracking_groups + Hive cache when the doc has no name.
+    final rawName = (s['trackingGroupName'] ?? '').toString().trim();
+    final canonical = _groupNames[rawId]?.trim();
+    final name =
+        rawName.isNotEmpty
+            ? rawName
+            : ((canonical != null && canonical.isNotEmpty) ? canonical : rawId);
+    return {'id': rawId, 'name': name};
+  }
+
+  /// After in-app rename, keep every session row in sync so lists stay consistent.
+  Future<void> _propagateTrackingGroupNameToSessions({
+    required String userId,
+    required String groupId,
+    required String name,
+  }) async {
+    final queries = [
+      FirebaseFirestore.instance
+          .collection('tracking')
+          .where('userId', isEqualTo: userId)
+          .where('trackingGroupId', isEqualTo: groupId),
+      FirebaseFirestore.instance
+          .collection('scan_requests')
+          .where('userId', isEqualTo: userId)
+          .where('trackingGroupId', isEqualTo: groupId),
+    ];
+    for (final query in queries) {
+      try {
+        final snap = await query.get();
+        WriteBatch batch = FirebaseFirestore.instance.batch();
+        var count = 0;
+        for (final doc in snap.docs) {
+          batch.update(doc.reference, {'trackingGroupName': name});
+          count++;
+          if (count >= 450) {
+            await batch.commit();
+            batch = FirebaseFirestore.instance.batch();
+            count = 0;
+          }
+        }
+        if (count > 0) await batch.commit();
+      } catch (e) {
+        debugPrint('tracking: propagate group name failed: $e');
+      }
+    }
   }
 
   String _overallGroupTrend(List<Map<String, dynamic>> sessions) {
@@ -575,257 +696,6 @@ class _TrackingPageState extends State<TrackingPage> {
     if (diff >= 1.0) return tr('trend_declining');
     return tr('trend_stable');
   }
-
-  Future<void> _loadSelectedRangeIndex() async {
-    final box = await Hive.openBox('trackingBox');
-    final idx = box.get('selectedRangeIndex');
-    if (idx is int && idx >= 0 && idx < TrackingModels.timeRanges.length) {
-      setState(() {
-        _selectedRangeIndex = idx;
-      });
-    }
-    final startStr = box.get('customStartDate') as String?;
-    final endStr = box.get('customEndDate') as String?;
-    if (startStr != null) {
-      _customStartDate = DateTime.tryParse(startStr);
-    }
-    if (endStr != null) {
-      _customEndDate = DateTime.tryParse(endStr);
-    }
-    final y = box.get('monthlyYear');
-    final m = box.get('monthlyMonth');
-    if (y is int && m is int) {
-      _monthlyYear = y;
-      _monthlyMonth = m;
-    }
-  }
-
-  Future<void> _saveSelectedRangeIndex(int idx) async {
-    final box = await Hive.openBox('trackingBox');
-    await box.put('selectedRangeIndex', idx);
-  }
-
-  Future<void> _saveCustomRange(DateTime start, DateTime end) async {
-    final box = await Hive.openBox('trackingBox');
-    await box.put(
-      'customStartDate',
-      DateTime(start.year, start.month, start.day).toIso8601String(),
-    );
-    await box.put(
-      'customEndDate',
-      DateTime(end.year, end.month, end.day).toIso8601String(),
-    );
-  }
-
-  // ignore: unused_element
-  Future<void> _saveMonthly(int year, int month) async {
-    final box = await Hive.openBox('trackingBox');
-    await box.put('monthlyYear', year);
-    await box.put('monthlyMonth', month);
-  }
-
-  // ignore: unused_element
-  Future<DateTime?> _showMonthYearPicker({
-    required BuildContext context,
-    required DateTime initialDate,
-    required DateTime firstDate,
-    required DateTime lastDate,
-  }) async {
-    DateTime selectedDate = initialDate;
-
-    return await showDialog<DateTime>(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: Text(tr('select_month_year')),
-              content: SizedBox(
-                width: 300,
-                height: 400,
-                child: Column(
-                  children: [
-                    // Year selector
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back_ios),
-                          onPressed:
-                              selectedDate.year > firstDate.year
-                                  ? () {
-                                    setState(() {
-                                      selectedDate = DateTime(
-                                        selectedDate.year - 1,
-                                        selectedDate.month,
-                                      );
-                                    });
-                                  }
-                                  : null,
-                        ),
-                        Text(
-                          '${selectedDate.year}',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.arrow_forward_ios),
-                          onPressed:
-                              selectedDate.year < lastDate.year
-                                  ? () {
-                                    setState(() {
-                                      selectedDate = DateTime(
-                                        selectedDate.year + 1,
-                                        selectedDate.month,
-                                      );
-                                    });
-                                  }
-                                  : null,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    // Month grid
-                    Expanded(
-                      child: GridView.builder(
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              crossAxisSpacing: 8,
-                              mainAxisSpacing: 8,
-                              childAspectRatio: 2,
-                            ),
-                        itemCount: 12,
-                        itemBuilder: (context, index) {
-                          final month = index + 1;
-                          final isSelected = selectedDate.month == month;
-                          final monthDate = DateTime(selectedDate.year, month);
-                          final isDisabled =
-                              monthDate.isBefore(
-                                DateTime(firstDate.year, firstDate.month),
-                              ) ||
-                              monthDate.isAfter(
-                                DateTime(lastDate.year, lastDate.month),
-                              );
-
-                          const monthNames = [
-                            'Jan',
-                            'Feb',
-                            'Mar',
-                            'Apr',
-                            'May',
-                            'Jun',
-                            'Jul',
-                            'Aug',
-                            'Sep',
-                            'Oct',
-                            'Nov',
-                            'Dec',
-                          ];
-
-                          return InkWell(
-                            onTap:
-                                isDisabled
-                                    ? null
-                                    : () {
-                                      setState(() {
-                                        selectedDate = DateTime(
-                                          selectedDate.year,
-                                          month,
-                                        );
-                                      });
-                                    },
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color:
-                                    isSelected
-                                        ? const Color(0xFF2D7204)
-                                        : isDisabled
-                                        ? Colors.grey.shade200
-                                        : Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color:
-                                      isSelected
-                                          ? const Color(0xFF2D7204)
-                                          : Colors.grey.shade300,
-                                  width: isSelected ? 2 : 1,
-                                ),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                monthNames[index],
-                                style: TextStyle(
-                                  color:
-                                      isDisabled
-                                          ? Colors.grey.shade400
-                                          : isSelected
-                                          ? Colors.white
-                                          : Colors.black87,
-                                  fontWeight:
-                                      isSelected
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, null),
-                  child: Text(tr('cancel')),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context, selectedDate),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2D7204),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: Text(tr('ok')),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // ignore: unused_element
-  Future<void> _pickCustomRange() async {
-    final initialRange =
-        _customStartDate != null && _customEndDate != null
-            ? DateTimeRange(start: _customStartDate!, end: _customEndDate!)
-            : DateTimeRange(
-              start: DateTime.now().subtract(const Duration(days: 6)),
-              end: DateTime.now(),
-            );
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(1970),
-      lastDate: DateTime.now(),
-      initialDateRange: initialRange,
-    );
-    if (picked != null) {
-      setState(() {
-        _customStartDate = picked.start;
-        _customEndDate = picked.end;
-        _selectedRangeIndex = 2; // Custom
-      });
-      await _saveSelectedRangeIndex(2);
-      await _saveCustomRange(picked.start, picked.end);
-    }
-  }
-
-  // Time range labels removed; tracking is group-based.
 
   Future<List<Map<String, dynamic>>> _loadSessionsWithFallback(
     String userId,
@@ -919,7 +789,9 @@ class _TrackingPageState extends State<TrackingPage> {
       final sessions = byId.values.toList();
 
       // Save to Hive for offline use
-      final box = await Hive.openBox('trackingBox');
+      final box = await Hive.openBox(
+        TrackingHiveBoxes.sessionCacheBoxName(userId),
+      );
       await box.put('scans', sessions);
 
       return sessions;
@@ -927,7 +799,9 @@ class _TrackingPageState extends State<TrackingPage> {
       print('Error loading from Firestore: $e');
       // Fallback to local Hive data
       try {
-        final box = await Hive.openBox('trackingBox');
+        final box = await Hive.openBox(
+          TrackingHiveBoxes.sessionCacheBoxName(userId),
+        );
         final sessions = box.get('scans', defaultValue: []);
         if (sessions is List) {
           return sessions
@@ -2534,7 +2408,15 @@ class _TrackingPageState extends State<TrackingPage> {
         });
 
         // Save to Hive for offline use
-        Hive.openBox('trackingBox').then((box) => box.put('scans', sessions));
+        final uid =
+            sessions.isNotEmpty
+                ? (sessions.first['userId'] ?? '').toString().trim()
+                : '';
+        Hive.openBox(
+          TrackingHiveBoxes.sessionCacheBoxName(
+            uid.isNotEmpty ? uid : null,
+          ),
+        ).then((box) => box.put('scans', sessions));
 
         // Build tracking-group list from sessions (including legacy "Ungrouped")
         // Skip deleted groups so they don't reappear from session data
@@ -2549,7 +2431,8 @@ class _TrackingPageState extends State<TrackingPage> {
         final endedGroups = <Map<String, String>>[];
         for (final e in groupMap.entries) {
           final id = e.key;
-          final baseName = _groupNames[id] ?? e.value;
+          // e.value already respects per-doc names via _groupKeyFromSession
+          final baseName = e.value;
           final ended = _isGroupEnded(id);
           final item = {'id': id, 'name': baseName};
           if (ended) {
@@ -2583,15 +2466,8 @@ class _TrackingPageState extends State<TrackingPage> {
                   return g != null && g['id'] == groupId;
                 }).toList();
 
-        // Apply time-range filter within the selected tracking group
-        final filteredSessions = TrackingModels.filterSessions(
-          sessionsByGroup,
-          _selectedRangeIndex,
-          customStart: _customStartDate,
-          customEnd: _customEndDate,
-          monthlyYear: _monthlyYear,
-          monthlyMonth: _monthlyMonth,
-        );
+        // Group-based tracking only: show all sessions for the selected group.
+        final filteredSessions = List<Map<String, dynamic>>.from(sessionsByGroup);
         final flatScans = TrackingModels.flattenScans(filteredSessions);
         // chart data not needed (group-based overall progress only)
         final overallCounts = TrackingModels.overallHealthyAndDiseases(
@@ -2692,14 +2568,18 @@ class _TrackingPageState extends State<TrackingPage> {
                                   ? null
                                   : () async {
                                     final id = _selectedTrackingGroupId!;
-                                    final current =
-                                        _groupNames[id] ??
+                                    final fromList =
                                         (groups.firstWhere(
                                                   (g) => g['id'] == id,
                                                   orElse: () => {'name': ''},
                                                 )['name'] ??
                                                 '')
-                                            .toString();
+                                            .toString()
+                                            .trim();
+                                    final current =
+                                        fromList.isNotEmpty
+                                            ? fromList
+                                            : (_groupNames[id] ?? '');
                                     await _renameTrackingGroup(id, current);
                                   },
                         ),
@@ -2755,14 +2635,18 @@ class _TrackingPageState extends State<TrackingPage> {
                                     if (confirm == true &&
                                         _selectedTrackingGroupId != null) {
                                       final id = _selectedTrackingGroupId!;
-                                      final currentName =
-                                          _groupNames[id] ??
+                                      final fromList =
                                           (groups.firstWhere(
                                                     (g) => g['id'] == id,
                                                     orElse: () => {'name': ''},
                                                   )['name'] ??
                                                   '')
-                                              .toString();
+                                              .toString()
+                                              .trim();
+                                      final currentName =
+                                          fromList.isNotEmpty
+                                              ? fromList
+                                              : (_groupNames[id] ?? '');
                                       await _endTrackingGroup(
                                         id,
                                         name: currentName,

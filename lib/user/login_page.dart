@@ -119,77 +119,92 @@ class _LoginPageState extends State<LoginPage> {
             // Sign out from Firebase Auth and Google Sign-In
             await FirebaseAuth.instance.signOut();
             await _googleSignIn.signOut();
-            
+
             setState(() {
               _isLoading = false;
             });
-            
+
             String roleText = role == 'expert' ? 'expert' : 'farmer';
             String statusText = status ?? 'inactive';
             String statusMessage = '';
-            
+
             // Create friendly status messages
             switch (statusText) {
               case 'pending':
-                statusMessage = 'Your $roleText account is pending approval. You will receive an email notification once your account is approved by an administrator.';
+                statusMessage =
+                    'Your $roleText account is pending approval. You will receive an email notification once your account is approved by an administrator.';
                 break;
               case 'rejected':
               case 'declined':
-                statusMessage = 'Your $roleText account has been declined. Please contact support for more information.';
+                statusMessage =
+                    'Your $roleText account has been declined. Please contact support for more information.';
                 break;
               case 'suspended':
               case 'banned':
-                statusMessage = 'Your $roleText account has been suspended. Please contact support for assistance.';
+                statusMessage =
+                    'Your $roleText account has been suspended. Please contact support for assistance.';
                 break;
               default:
-                statusMessage = 'Your $roleText account is currently $statusText. Please contact support for assistance.';
+                statusMessage =
+                    'Your $roleText account is currently $statusText. Please contact support for assistance.';
             }
-            
+
             showDialog(
               context: context,
               barrierDismissible: false,
-              builder: (context) => AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                title: Row(
-                  children: [
-                    Icon(
-                      statusText == 'pending' ? Icons.pending_outlined : Icons.warning_amber_rounded,
-                      color: statusText == 'pending' ? Colors.orange : Colors.red,
-                      size: 28,
+              builder:
+                  (context) => AlertDialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        statusText == 'pending' ? 'Account Pending Approval' : 'Account Not Active',
-                        style: TextStyle(
-                          color: statusText == 'pending' ? Colors.orange : Colors.red,
-                          fontWeight: FontWeight.bold,
+                    title: Row(
+                      children: [
+                        Icon(
+                          statusText == 'pending'
+                              ? Icons.pending_outlined
+                              : Icons.warning_amber_rounded,
+                          color:
+                              statusText == 'pending'
+                                  ? Colors.orange
+                                  : Colors.red,
+                          size: 28,
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            statusText == 'pending'
+                                ? 'Account Pending Approval'
+                                : 'Account Not Active',
+                            style: TextStyle(
+                              color:
+                                  statusText == 'pending'
+                                      ? Colors.orange
+                                      : Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    content: Text(
+                      statusMessage,
+                      style: TextStyle(fontSize: 16, height: 1.5),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                        },
+                        child: Text(
+                          'OK',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                content: Text(
-                  statusMessage,
-                  style: TextStyle(fontSize: 16, height: 1.5),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    child: Text(
-                      'OK',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green,
-                      ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
             );
             return;
           }
@@ -240,10 +255,10 @@ class _LoginPageState extends State<LoginPage> {
             // If deletion fails, try to sign out as fallback
             await FirebaseAuth.instance.signOut();
           }
-          
+
           // Sign out from Google Sign-In
           await _googleSignIn.signOut();
-          
+
           setState(() {
             _isLoading = false;
           });
@@ -252,44 +267,45 @@ class _LoginPageState extends State<LoginPage> {
           showDialog(
             context: context,
             barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.orange, size: 28),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Account Not Registered',
-                      style: TextStyle(
-                        color: Colors.orange,
-                        fontWeight: FontWeight.bold,
+            builder:
+                (context) => AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  title: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.orange, size: 28),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Account Not Registered',
+                          style: TextStyle(
+                            color: Colors.orange,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  content: Text(
+                    'This Google account is not yet registered in our system. Please register first using the registration form before signing in with Google.',
+                    style: TextStyle(fontSize: 16, height: 1.5),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      child: Text(
+                        'OK',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              content: Text(
-                'This Google account is not yet registered in our system. Please register first using the registration form before signing in with Google.',
-                style: TextStyle(fontSize: 16, height: 1.5),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: Text(
-                    'OK',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                    ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
           );
           return;
         }
@@ -397,28 +413,33 @@ class _LoginPageState extends State<LoginPage> {
               String roleText = role == 'expert' ? 'expert' : 'farmer';
               String statusText = status ?? 'inactive';
               String statusMessage = '';
-              
+
               // Create friendly status messages
               switch (statusText) {
                 case 'pending':
-                  statusMessage = 'Your $roleText account is pending approval. You will receive an email notification once your account is approved by an administrator.';
+                  statusMessage =
+                      'Your $roleText account is pending approval. You will receive an email notification once your account is approved by an administrator.';
                   break;
                 case 'rejected':
                 case 'declined':
-                  statusMessage = 'Your $roleText account has been declined. Please contact support for more information.';
+                  statusMessage =
+                      'Your $roleText account has been declined. Please contact support for more information.';
                   break;
                 case 'suspended':
                 case 'banned':
-                  statusMessage = 'Your $roleText account has been suspended. Please contact support for assistance.';
+                  statusMessage =
+                      'Your $roleText account has been suspended. Please contact support for assistance.';
                   break;
                 default:
-                  statusMessage = 'Your $roleText account is currently $statusText. Please contact support for assistance.';
+                  statusMessage =
+                      'Your $roleText account is currently $statusText. Please contact support for assistance.';
               }
-              
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(statusMessage),
-                  backgroundColor: statusText == 'pending' ? Colors.orange : Colors.red,
+                  backgroundColor:
+                      statusText == 'pending' ? Colors.orange : Colors.red,
                   duration: const Duration(seconds: 5),
                 ),
               );
@@ -552,7 +573,8 @@ class _LoginPageState extends State<LoginPage> {
             backgroundColor = Colors.red;
             break;
           case 'too-many-requests':
-            message = 'Too many failed login attempts. Please try again later or reset your password.';
+            message =
+                'Too many failed login attempts. Please try again later or reset your password.';
             backgroundColor = Colors.orange;
             break;
           case 'network-request-failed':
@@ -561,16 +583,19 @@ class _LoginPageState extends State<LoginPage> {
             backgroundColor = Colors.orange;
             break;
           case 'operation-not-allowed':
-            message = 'Email/password sign-in is not enabled. Please contact support.';
+            message =
+                'Email/password sign-in is not enabled. Please contact support.';
             backgroundColor = Colors.red;
             break;
           case 'weak-password':
-            message = 'Password is too weak. Please choose a stronger password.';
+            message =
+                'Password is too weak. Please choose a stronger password.';
             backgroundColor = Colors.orange;
             break;
           default:
             // Show the actual error code for debugging purposes
-            message = 'Login failed: ${e.code}. Please try again or contact support.';
+            message =
+                'Login failed: ${e.code}. Please try again or contact support.';
             backgroundColor = Colors.red;
         }
 

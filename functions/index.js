@@ -48,7 +48,7 @@ async function sendToTokens(tokens, payload) {
     return { successCount: 0, failureCount: 0 };
   const response = await messaging.sendEachForMulticast(
     { tokens, ...payload },
-    false
+    false,
   );
   return response;
 }
@@ -287,7 +287,7 @@ exports.notifyUserOnApproval = functions.firestore
     const emailResult = await sendEmailNotification(
       userEmail,
       subject,
-      htmlContent
+      htmlContent,
     );
 
     if (emailResult.success) {
@@ -305,7 +305,7 @@ exports.notifyUserOnApproval = functions.firestore
     } else {
       console.error(
         `Failed to send approval email to ${userEmail}:`,
-        emailResult.error
+        emailResult.error,
       );
     }
 
