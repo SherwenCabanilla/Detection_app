@@ -58,9 +58,9 @@ class NotificationService {
               .collection('users')
               .doc(user.uid)
               .set({'fcmToken': token}, SetOptions(merge: true));
-          print('✅ FCM token saved: ${token.substring(0, 20)}...');
+          print('✅ FCM token saved: \${token.substring(0, 20)}...');
         } catch (e) {
-          print('⚠️ Error saving FCM token: $e');
+          print('⚠️ Error saving FCM token: \$e');
         }
       }
 
@@ -82,7 +82,7 @@ class NotificationService {
                 .update({'fcmToken': newToken});
             print('✅ FCM token refreshed');
           } catch (e) {
-            print('⚠️ Error updating FCM token: $e');
+            print('⚠️ Error updating FCM token: \$e');
           }
         }
         _subscribeToTopics();
@@ -93,7 +93,7 @@ class NotificationService {
 
       print('✅ FCM setup completed');
     } catch (e) {
-      print('❌ FCM setup failed: $e');
+      print('❌ FCM setup failed: \$e');
     }
   }
 
@@ -121,7 +121,7 @@ class NotificationService {
         await FirebaseMessaging.instance.unsubscribeFromTopic('experts');
       }
     } catch (e) {
-      print('⚠️ Error subscribing to topics: $e');
+      print('⚠️ Error subscribing to topics: \$e');
     }
   }
 
@@ -153,7 +153,7 @@ class NotificationService {
         );
       }
     } catch (e) {
-      print('⚠️ Error handling foreground message: $e');
+      print('⚠️ Error handling foreground message: \$e');
     }
   }
 
@@ -186,7 +186,7 @@ class NotificationService {
         );
       }
     } catch (e) {
-      print('❌ Background message handler failed: $e');
+      print('❌ Background message handler failed: \$e');
     }
   }
 }
